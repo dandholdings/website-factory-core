@@ -1,0 +1,9 @@
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <p class="muted">
+      {{ $disclaimer := "Calm, practical reassurance — not medical, legal, or financial advice." }}
+      {{ with site.Data.site }}{{ with .site }}{{ with .tagline }}{{ $disclaimer = printf "%s — not medical, legal, or financial advice." . }}{{ end }}{{ end }}{{ end }}
+      {{ $disclaimer }}
+    </p>
+  </div>
+</footer>

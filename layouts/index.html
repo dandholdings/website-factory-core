@@ -1,0 +1,9 @@
+{{ define "main" }}
+<h1>{{ .Site.Title }}</h1>
+{{ $brand := .Site.Title }}
+{{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $brand = . }}{{ end }}{{ end }}{{ end }}
+{{ $tagline := "calm, practical reassurance — not advice." }}
+{{ with site.Data.site }}{{ with .site }}{{ with .tagline }}{{ $tagline = . }}{{ end }}{{ end }}{{ end }}
+<p><strong>{{ $brand }}</strong>: {{ $tagline }}</p>
+{{ .Content }}
+{{ end }}
