@@ -14,7 +14,7 @@ In each *site repo* `hugo.yaml`:
 ```yaml
 module:
   imports:
-    - path: github.com/deedsy1/website-factory-core
+    - path: github.com/dandholdings/website-factory-core
 ```
 
 Cloudflare Pages builds the site repo normally; Hugo fetches this module during build.

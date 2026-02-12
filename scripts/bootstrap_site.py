@@ -86,7 +86,7 @@ CONNECT_TIMEOUT = _safe_int(os.getenv("CONNECT_TIMEOUT"), 20)
 # FIX: Bootstrap needs much more tokens for 300 titles.
 # At ~8 tokens per title, 300 titles = ~2400+ tokens. Default 1600 will always truncate.
 # Use a dedicated higher cap for bootstrap, overridable via env.
-MAX_OUTPUT_TOKENS = _safe_int(os.getenv("MAX_OUTPUT_TOKENS") or os.getenv("BOOTSTRAP_MAX_TOKENS"), 4096)
+MAX_OUTPUT_TOKENS = _safe_int(os.getenv("MAX_OUTPUT_TOKENS") or os.getenv("BOOTSTRAP_MAX_TOKENS"), 8192)
 
 # FIX: Temperature — only clamp for Moonshot/Kimi. Let Gemini use any value.
 try:

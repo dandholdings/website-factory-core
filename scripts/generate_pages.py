@@ -281,23 +281,67 @@ def save_plan(path: str, plan: dict) -> None:
         yaml.safe_dump(plan or {"items": []}, f, sort_keys=False, allow_unicode=True)
 
 def parse_json_strict_or_extract(raw: str) -> dict:
+    """Parse a JSON object from model output. Robust against fences, prose, truncation."""
     raw = (raw or "").strip()
+    if not raw:
+        raise json.JSONDecodeError("Empty model output", raw, 0)
+
+    def _strip_fences(s: str) -> str:
+        s2 = re.sub(r"^```(?:json)?\s*", "", s.strip(), flags=re.I)
+        s2 = re.sub(r"\s*```\s*$", "", s2.strip())
+        return s2.strip()
+
+    cand = _strip_fences(raw)
+
+    # Try direct parse first
     try:
-        return json.loads(raw)
+        obj = json.loads(cand)
+        if isinstance(obj, dict):
+            return obj
+        if isinstance(obj, list) and len(obj) == 1 and isinstance(obj[0], dict):
+            return obj[0]
     except json.JSONDecodeError:
         pass
 
-    raw2 = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.I)
-    raw2 = re.sub(r"\s*```$", "", raw2)
-    try:
-        return json.loads(raw2)
-    except json.JSONDecodeError:
-        pass
+    # Walk for the first balanced JSON object
+    s = cand
+    start = s.find("{")
+    if start == -1:
+        raise json.JSONDecodeError("No JSON object found", cand, 0)
 
-    m = re.search(r"\{.*\}", raw, re.S)
-    if not m:
-        raise json.JSONDecodeError("No JSON object found", raw, 0)
-    return json.loads(m.group(0))
+    depth = 0
+    in_str = False
+    esc = False
+    end = None
+    for i in range(start, len(s)):
+        ch = s[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+
+    if end is None:
+        raise json.JSONDecodeError("JSON object appears truncated (missing closing brace)", cand, 0)
+
+    snippet = s[start:end]
+    obj = json.loads(snippet)
+    if not isinstance(obj, dict):
+        raise json.JSONDecodeError("Top-level JSON must be an object", snippet, 0)
+    return obj
 
 def kimi_json(system: str, user: str, temperature: float = 0.7, max_tokens: int = 1400) -> dict:
     """Request a JSON object from the configured LLM provider.
