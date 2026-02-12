@@ -142,7 +142,7 @@ PROVIDER = _llm_provider()
 REQUEST_TIMEOUT = _safe_int(os.getenv("REQUEST_TIMEOUT"), 180)
 CONNECT_TIMEOUT = _safe_int(os.getenv("CONNECT_TIMEOUT"), 20)
 
-MAX_OUTPUT_TOKENS = _safe_int(os.getenv("MAX_OUTPUT_TOKENS"), 1600)
+MAX_OUTPUT_TOKENS = _safe_int(os.getenv("MAX_OUTPUT_TOKENS"), 4096)
 
 # FIX: Temperature — only clamp for Moonshot/Kimi. Let Gemini use any value.
 try:
