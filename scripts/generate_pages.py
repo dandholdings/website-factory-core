@@ -385,6 +385,10 @@ def kimi_json(system: str, user: str, temperature: float = 0.7, max_tokens: int 
                 "maxOutputTokens": int(max_tokens),
                 # FIX: Use responseMimeType to force JSON output from Gemini
                 "responseMimeType": "application/json",
+                # FIX: Disable thinking — Gemini 2.5 Flash spends ~3900 tokens
+                # on internal reasoning, leaving only ~150 for actual output.
+                # Content generation doesn't need chain-of-thought.
+                "thinkingConfig": {"thinkingBudget": 0},
             },
         }
         headers = {
