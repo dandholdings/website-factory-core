@@ -7,12 +7,22 @@
     {{ end }}
   </header>
 
+  {{/* Above-the-fold ad: shows only when ads are enabled. */}}
+  {{ partial "ad-slot.html" (dict "ctx" . "slot" "in_content_1") }}
+
   <div class="page-body content">
     {{ .Content }}
   </div>
 
-  {{ partial "ads.html" . }}
+  {{ partial "ad-slot.html" (dict "ctx" . "slot" "in_content_2") }}
 
+  {{/* Related links remain in main for mobile; sidebar also includes them on desktop. */}}
   {{ partial "related.html" . }}
+
+  {{ partial "ad-slot.html" (dict "ctx" . "slot" "in_content_3") }}
 </article>
+{{ end }}
+
+{{ define "sidebar" }}
+  {{ partial "sidebar.html" . }}
 {{ end }}

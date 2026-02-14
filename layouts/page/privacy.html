@@ -1,0 +1,36 @@
+{{ define "main" }}
+{{ $brand := .Site.Title }}
+{{ $email := "" }}
+{{ with site.Data.site }}{{ with .site }}
+  {{ with .brand }}{{ $brand = . }}{{ end }}
+  {{ with .contact_email }}{{ $email = . }}{{ end }}
+{{ end }}{{ end }}
+{{ if not $email }}{{ with .Site.Params.factory }}{{ with .contactEmail }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
+
+<article class="page">
+  <header class="page-header">
+    <h1 class="page-title">{{ .Title }}</h1>
+    {{ with .Params.summary }}<div class="lede"><strong>{{ . }}</strong></div>{{ end }}
+  </header>
+
+  <div class="page-body content">
+    <p><strong>{{ $brand }}</strong> is a static website. We don’t run accounts, logins, or user profiles.</p>
+    <h2>Analytics</h2>
+    <p>We may use privacy-respecting analytics to understand which pages are useful and to improve navigation. This data is aggregated and not intended to identify you.</p>
+
+    <h2>Advertising</h2>
+    <p>We may show ads through third-party providers (for example, Google). These providers may use cookies or similar technologies to deliver and measure ads.</p>
+
+    <h2>Contact</h2>
+    {{ if $email }}
+      <p>If you have questions about this policy, email <a href="mailto:{{ $email }}">{{ $email }}</a>.</p>
+    {{ else }}
+      <p class="muted">If you have questions about this policy, use our Contact page.</p>
+    {{ end }}
+
+    {{ .Content }}
+  </div>
+</article>
+{{ end }}
+
+{{ define "sidebar" }}{{ partial "sidebar.html" . }}{{ end }}

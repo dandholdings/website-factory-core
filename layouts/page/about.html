@@ -1,0 +1,21 @@
+{{ define "main" }}
+{{ $brand := .Site.Title }}
+{{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $brand = . }}{{ end }}{{ end }}{{ end }}
+
+<article class="page">
+  <header class="page-header">
+    <h1 class="page-title">{{ .Title }}</h1>
+    {{ with .Params.summary }}<div class="lede"><strong>{{ . }}</strong></div>{{ end }}
+  </header>
+
+  <div class="page-body content">
+    <p><strong>{{ $brand }}</strong> publishes evergreen guides designed to be calm, practical, and easy to scan.</p>
+    <p class="muted">Nothing on this site is medical, legal, or financial advice. It’s general information to help you think clearly and decide your next step.</p>
+    {{ .Content }}
+  </div>
+
+  {{ partial "ad-slot.html" (dict "ctx" . "slot" "page_bottom") }}
+</article>
+{{ end }}
+
+{{ define "sidebar" }}{{ partial "sidebar.html" . }}{{ end }}

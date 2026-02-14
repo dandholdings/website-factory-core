@@ -154,6 +154,41 @@ def save_yaml(path: Path, data: dict):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
+
+def ensure_hub_index_pages(hubs: list[dict]):
+    """Create content/hubs/<id>/_index.md so hub landing pages exist for navigation."""
+    hubs_root = Path("content") / "hubs"
+    hubs_root.mkdir(parents=True, exist_ok=True)
+
+    # Root hubs index if missing
+    root_index = hubs_root / "_index.md"
+    if not root_index.exists():
+        root_index.write_text(
+            "---\n"
+            "title: \"Topics\"\n"
+            "description: \"Browse guides by topic.\"\n"
+            "---\n\n",
+            encoding="utf-8",
+        )
+
+    for h in hubs or []:
+        hid = str(h.get("id") or "").strip()
+        label = str(h.get("label") or hid).strip()
+        if not hid:
+            continue
+        p = hubs_root / hid
+        p.mkdir(parents=True, exist_ok=True)
+        idx = p / "_index.md"
+        if idx.exists():
+            continue
+        idx.write_text(
+            "---\n"
+            f"title: \"{label}\"\n"
+            f"description: \"Guides and checklists about {label.lower()}.\"\n"
+            "---\n\n",
+            encoding="utf-8",
+        )
+
 def parse_json_strict_or_extract(raw: str) -> dict:
     """Parse a JSON object from model output. Robust against fences, prose, truncation."""
     if raw is None:
@@ -784,6 +819,8 @@ def main(site_slug: str = "", force_reset: bool = False):
     gates["faq_max"] = gates.get("faq_max", 8)
 
     save_yaml(SITE_PATH, site_cfg)
+    # Create hub landing pages for navigation (content/hubs/<id>/_index.md)
+    ensure_hub_index_pages(hubs)
     patch_hugo_yaml(site_cfg)
 
     write_titles_pool(titles)

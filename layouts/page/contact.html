@@ -1,0 +1,32 @@
+{{ define "main" }}
+{{ $brand := .Site.Title }}
+{{ $email := "" }}
+{{ with site.Data.site }}{{ with .site }}
+  {{ with .brand }}{{ $brand = . }}{{ end }}
+  {{ with .contact_email }}{{ $email = . }}{{ end }}
+{{ end }}{{ end }}
+{{ if not $email }}{{ with .Site.Params.factory }}{{ with .contactEmail }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
+
+<article class="page">
+  <header class="page-header">
+    <h1 class="page-title">{{ .Title }}</h1>
+    {{ with .Params.summary }}<div class="lede"><strong>{{ . }}</strong></div>{{ end }}
+  </header>
+
+  <div class="page-body content">
+    <p>If you spot an error, have feedback, or want to suggest an improvement, you can reach <strong>{{ $brand }}</strong> at:</p>
+
+    {{ if $email }}
+      <p><a href="mailto:{{ $email }}">{{ $email }}</a></p>
+    {{ else }}
+      <p class="muted">Contact email not configured yet.</p>
+    {{ end }}
+
+    {{ .Content }}
+  </div>
+
+  {{ partial "ad-slot.html" (dict "ctx" . "slot" "page_bottom") }}
+</article>
+{{ end }}
+
+{{ define "sidebar" }}{{ partial "sidebar.html" . }}{{ end }}

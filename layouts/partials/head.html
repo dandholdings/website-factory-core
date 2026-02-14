@@ -31,6 +31,60 @@
 <meta property="og:type" content="{{ if .IsHome }}website{{ else }}article{{ end }}">
 {{ with .Permalink }}<meta property="og:url" content="{{ . }}">{{ end }}
 
+{{/* Basic JSON-LD for better eligibility + understanding */}}
+{{ $brand := .Site.Title }}
+{{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $brand = . }}{{ end }}{{ end }}{{ end }}
+{{ $base := .Site.BaseURL }}
+{{ with site.Data.site }}{{ with .site }}{{ with .base_url }}{{ $base = . }}{{ end }}{{ end }}{{ end }}
+
+{{ if .IsHome }}
+<script type="application/ld+json">
+{{- dict
+  "@context" "https://schema.org"
+  "@type" "WebSite"
+  "name" $brand
+  "url" $base
+| jsonify -}}
+</script>
+{{ else }}
+<script type="application/ld+json">
+{{- dict
+  "@context" "https://schema.org"
+  "@type" "Article"
+  "headline" .Title
+  "description" $desc
+  "mainEntityOfPage" (dict "@type" "WebPage" "@id" .Permalink)
+  "publisher" (dict "@type" "Organization" "name" $brand)
+  "author" (dict "@type" "Organization" "name" $brand)
+| jsonify -}}
+</script>
+{{ end }}
+
+{{/* Ads: load provider script once (slots render elsewhere). */}}
+{{ $adsProvider := "none" }}
+{{ $adsClient := "" }}
+{{ $adsMode := "auto" }}
+{{ with .Site.Params.ads }}
+  {{ with .provider }}{{ $adsProvider = . }}{{ end }}
+  {{ with .adsenseClient }}{{ $adsClient = . }}{{ end }}
+  {{ with .mode }}{{ $adsMode = . }}{{ end }}
+{{ end }}
+{{ with site.Data.site }}
+  {{ with .ads }}
+    {{ with .provider }}{{ $adsProvider = . }}{{ end }}
+    {{ with .adsense_client }}{{ $adsClient = . }}{{ end }}
+    {{ with .mode }}{{ $adsMode = . }}{{ end }}
+  {{ end }}
+{{ end }}
+
+{{ if and (eq $adsProvider "adsense") $adsClient }}
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ $adsClient }}" crossorigin="anonymous"></script>
+  {{/* Auto mode: AdSense will place ads; we still provide manual slots for hybrid. */}}
+  {{ if eq $adsMode "auto" }}
+    <meta name="google-adsense-account" content="{{ $adsClient }}">
+  {{ end }}
+{{ end }}
+
 {{/* Dynamic theme pack CSS */}}
 {{ $pack := "calm-paper" }}
 {{ with site.Params.theme }}{{ with .pack }}{{ $pack = . }}{{ end }}{{ end }}

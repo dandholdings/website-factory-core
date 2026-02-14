@@ -12,7 +12,17 @@
   {{ partial "header.html" . }}
 
   <main class="container">
-    {{ block "main" . }}{{ end }}
+    <div class="layout">
+      <div class="maincol">
+        {{ block "main" . }}{{ end }}
+      </div>
+
+      <aside class="sidebar" aria-label="Sidebar">
+        {{ block "sidebar" . }}
+          {{ partial "sidebar.html" . }}
+        {{ end }}
+      </aside>
+    </div>
   </main>
 
   {{ partial "footer.html" . }}

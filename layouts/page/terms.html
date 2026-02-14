@@ -1,0 +1,28 @@
+{{ define "main" }}
+{{ $brand := .Site.Title }}
+{{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $brand = . }}{{ end }}{{ end }}{{ end }}
+
+<article class="page">
+  <header class="page-header">
+    <h1 class="page-title">{{ .Title }}</h1>
+    {{ with .Params.summary }}<div class="lede"><strong>{{ . }}</strong></div>{{ end }}
+  </header>
+
+  <div class="page-body content">
+    <p>By using <strong>{{ $brand }}</strong>, you agree to these terms.</p>
+
+    <h2>No professional advice</h2>
+    <p>The content is general information only and is not medical, legal, or financial advice.</p>
+
+    <h2>Use at your own risk</h2>
+    <p>We aim for accuracy, but we can’t guarantee completeness or suitability for your situation.</p>
+
+    <h2>Advertising and affiliate links</h2>
+    <p>Some pages may contain ads or affiliate links. This helps keep the site free.</p>
+
+    {{ .Content }}
+  </div>
+</article>
+{{ end }}
+
+{{ define "sidebar" }}{{ partial "sidebar.html" . }}{{ end }}

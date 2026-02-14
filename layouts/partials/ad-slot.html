@@ -1,0 +1,66 @@
+{{/*
+Render an ad slot with CLS-safe wrapper.
+
+Usage:
+  {{ partial "ad-slot.html" (dict "ctx" . "slot" "in_content_1") }}
+
+Config sources (priority):
+  1) data/site.yaml -> ads
+  2) hugo.yaml params -> ads
+
+Supported providers:
+  - none
+  - adsense
+
+Modes:
+  - auto   (AdSense Auto Ads enabled; slots are optional)
+  - manual (only render slots that have ad-slot ids)
+  - hybrid (both)
+*/}}
+
+{{ $ctx := .ctx }}
+{{ $slot := .slot | default "in_content_1" }}
+
+{{ $provider := "none" }}
+{{ $client := "" }}
+{{ $mode := "auto" }}
+{{ $slots := dict }}
+
+{{ with $ctx.Site.Params.ads }}
+  {{ with .provider }}{{ $provider = . }}{{ end }}
+  {{ with .adsenseClient }}{{ $client = . }}{{ end }}
+  {{ with .mode }}{{ $mode = . }}{{ end }}
+  {{ with .slots }}{{ $slots = . }}{{ end }}
+{{ end }}
+{{ with site.Data.site }}
+  {{ with .ads }}
+    {{ with .provider }}{{ $provider = . }}{{ end }}
+    {{ with .adsense_client }}{{ $client = . }}{{ end }}
+    {{ with .mode }}{{ $mode = . }}{{ end }}
+    {{ with .slots }}{{ $slots = . }}{{ end }}
+  {{ end }}
+{{ end }}
+
+{{/* Slot id lookup */}}
+{{ $slotId := "" }}
+{{ with index $slots $slot }}{{ $slotId = . }}{{ end }}
+
+{{ if and (eq $provider "adsense") $client }}
+  {{/* In manual mode, only render if slot id exists. In auto/hybrid, render if provided. */}}
+  {{ if or (ne $mode "manual") (and (eq $mode "manual") $slotId) }}
+    <div class="adwrap" data-slot="{{ $slot }}">
+      {{ if $slotId }}
+        <ins class="adsbygoogle"
+          style="display:block"
+          data-ad-client="{{ $client }}"
+          data-ad-slot="{{ $slotId }}"
+          data-ad-format="auto"
+          data-full-width-responsive="true"></ins>
+        <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+      {{ else }}
+        {{/* No slot id — keep wrapper for layout consistency (especially in auto mode). */}}
+        <div class="adplaceholder" aria-hidden="true"></div>
+      {{ end }}
+    </div>
+  {{ end }}
+{{ end }}

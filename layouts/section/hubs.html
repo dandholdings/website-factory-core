@@ -1,0 +1,58 @@
+{{ define "main" }}
+{{ $dir := .File.Dir | strings.TrimSuffix "/" }}
+{{ $leaf := path.Base $dir }}
+
+{{/* Root hubs index: /hubs/ */}}
+{{ if eq $leaf "hubs" }}
+  <section class="list">
+    <header class="page-header">
+      <h1 class="page-title">{{ .Title }}</h1>
+      {{ with .Params.description }}<p class="muted">{{ . }}</p>{{ end }}
+    </header>
+
+    {{ partial "ad-slot.html" (dict "ctx" . "slot" "hubs_top") }}
+
+    {{ $hubs := slice }}
+    {{ with site.Data.site }}{{ with .taxonomy }}{{ with .hubs }}{{ $hubs = . }}{{ end }}{{ end }}{{ end }}
+
+    <div class="cards">
+      {{ range $hubs }}
+        {{ $count := (len (where site.RegularPages "Params.hub" .id)) }}
+        <a class="card" href="{{ (printf "/hubs/%s/" .id) | relURL }}">
+          <div class="card-title">{{ .label }}</div>
+          <div class="card-summary">{{ $count }} guides</div>
+        </a>
+      {{ end }}
+    </div>
+
+    {{ partial "ad-slot.html" (dict "ctx" . "slot" "hubs_bottom") }}
+  </section>
+
+{{ else }}
+  {{/* Hub page: /hubs/<id>/ */}}
+  {{ $hub := $leaf }}
+  <section class="list">
+    <header class="page-header">
+      <h1 class="page-title">{{ .Title }}</h1>
+      {{ with .Params.description }}<p class="muted">{{ . }}</p>{{ end }}
+    </header>
+
+    {{ partial "ad-slot.html" (dict "ctx" . "slot" "hub_top") }}
+
+    <div class="cards">
+      {{ range where site.RegularPages "Params.hub" $hub }}
+        <a class="card" href="{{ .RelPermalink }}">
+          <div class="card-title">{{ .Title }}</div>
+          {{ with .Params.summary }}<div class="card-summary">{{ . }}</div>{{ end }}
+        </a>
+      {{ end }}
+    </div>
+
+    {{ partial "ad-slot.html" (dict "ctx" . "slot" "hub_bottom") }}
+  </section>
+{{ end }}
+{{ end }}
+
+{{ define "sidebar" }}
+  {{ partial "sidebar.html" . }}
+{{ end }}

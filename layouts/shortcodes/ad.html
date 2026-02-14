@@ -1,0 +1,3 @@
+{{/* Hugo shortcode: {{< ad slot="in_content_1" >}} */}}
+{{ $slot := .Get "slot" | default "in_content_1" }}
+{{ partial "ad-slot.html" (dict "ctx" .Page "slot" $slot) }}

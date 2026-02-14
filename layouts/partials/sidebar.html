@@ -1,0 +1,38 @@
+{{/*
+Sidebar: designed to boost session duration + pageviews (good for SEO + ads).
+
+Contents:
+- Optional sticky ad slot
+- Table of contents for long pages
+- Hub navigation
+- Related links
+*/}}
+
+{{ partial "ad-slot.html" (dict "ctx" . "slot" "sidebar") }}
+
+{{/* Table of contents (only if page has enough headings) */}}
+{{ if and (not .IsHome) (gt (len .TableOfContents) 100) }}
+  <section class="sidebox toc">
+    <div class="sidebox-title">On this page</div>
+    <div class="toc-body">{{ .TableOfContents }}</div>
+  </section>
+{{ end }}
+
+{{/* Hub nav */}}
+{{ $hubs := slice }}
+{{ with site.Data.site }}{{ with .taxonomy }}{{ with .hubs }}{{ $hubs = . }}{{ end }}{{ end }}{{ end }}
+{{ if gt (len $hubs) 0 }}
+  <section class="sidebox">
+    <div class="sidebox-title">Browse topics</div>
+    <ul class="sidelinks">
+      {{ range $hubs }}
+        <li><a href="{{ (printf "/hubs/%s/" .id) | relURL }}">{{ .label }}</a></li>
+      {{ end }}
+    </ul>
+  </section>
+{{ end }}
+
+{{/* Extra related links for single pages */}}
+{{ if and (not .IsHome) (.IsPage) }}
+  {{ partial "related.html" . }}
+{{ end }}

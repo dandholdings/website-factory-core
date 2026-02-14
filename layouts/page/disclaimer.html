@@ -1,0 +1,25 @@
+{{ define "main" }}
+{{ $brand := .Site.Title }}
+{{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $brand = . }}{{ end }}{{ end }}{{ end }}
+
+<article class="page">
+  <header class="page-header">
+    <h1 class="page-title">{{ .Title }}</h1>
+    {{ with .Params.summary }}<div class="lede"><strong>{{ . }}</strong></div>{{ end }}
+  </header>
+
+  <div class="page-body content">
+    <p><strong>{{ $brand }}</strong> publishes informational content for general educational purposes.</p>
+
+    <h2>Not professional advice</h2>
+    <p>Nothing on this site is medical, legal, or financial advice. If you need professional help, consult a qualified professional in your area.</p>
+
+    <h2>No guarantees</h2>
+    <p>We don’t make guarantees about outcomes. Your situation is unique.</p>
+
+    {{ .Content }}
+  </div>
+</article>
+{{ end }}
+
+{{ define "sidebar" }}{{ partial "sidebar.html" . }}{{ end }}
