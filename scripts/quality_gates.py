@@ -114,11 +114,13 @@ def load_yaml(path: str) -> dict:
 def read_frontmatter(md_text: str) -> Tuple[Dict, str]:
     if not md_text.startswith("---"):
         return {}, md_text
-    parts = md_text.split("\n---\n", 2)
-    if len(parts) < 3:
+    # Strip the leading "---\n" then split on the closing "\n---\n"
+    after_open = md_text[4:]  # skip "---\n"
+    parts = after_open.split("\n---\n", 1)
+    if len(parts) < 2:
         return {}, md_text
-    fm_raw = parts[1]
-    body = parts[2]
+    fm_raw = parts[0]
+    body = parts[1]
     try:
         fm = yaml.safe_load(fm_raw) or {}
         if not isinstance(fm, dict):
