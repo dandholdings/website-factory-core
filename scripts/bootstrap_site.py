@@ -639,13 +639,18 @@ def _deterministic_bootstrap_fallback(niche: str, title_count: int) -> Dict[str,
         if len(uniq) >= title_count:
             break
 
+    # Build catalog with round-robin hub assignment for fallback
+    hub_ids = [h["id"] for h in hubs]
+    catalog = [{"title": t, "hub": hub_ids[i % len(hub_ids)]} for i, t in enumerate(uniq)]
+
     return {
         "site_title": site_title,
         "brand": brand,
         "tagline": tagline[:120],
         "default_meta_description": meta,
         "theme_pack": theme_pack,
-        "hubs": hubs,
+        "taxonomy": {"hubs": hubs},
+        "catalog": catalog,
         "titles_pool": uniq,
     }
 
@@ -682,7 +687,7 @@ def main(site_slug: str = "", force_reset: bool = False):
     )
 
     user = {
-        "task": "Create site identity + theme choice + titles pool for an evergreen website.",
+        "task": "Create site identity + theme choice + a catalog of titles assigned to topic hubs.",
         "inputs": {
             "niche": NICHE,
             "tone": TONE or "neutral, calm, beginner-friendly",
@@ -695,16 +700,23 @@ def main(site_slug: str = "", force_reset: bool = False):
             "tagline": "string (8-14 words, no hype, no promises)",
             "default_meta_description": "string (<= 155 chars, neutral)",
             "theme_pack": "one of allowed_theme_packs",
-            "hubs": [
-                {"id": "work-career|money-stress|burnout-load|milestones|social-norms", "label": "string"}
+            "taxonomy": {
+                "hubs": [
+                    {"id": "slug-style-id", "label": "Human Label", "description": "1-sentence description"}
+                ]
+            },
+            "catalog": [
+                {"title": "A question-style evergreen page title", "hub": "slug-style-id"}
             ],
-            "titles_pool": [f"list of {TITLE_COUNT} unique page titles, question-style, evergreen, global-friendly"],
         },
         "notes": [
             "Titles must avoid dates/years, prices, stats, brand names, and advice framing.",
             "Prefer novice-friendly, definitional and comparison topics.",
             "Keep titles short and specific; no clickbait.",
-            f"You MUST produce at least {TITLE_COUNT} titles in the titles_pool array.",
+            f"You MUST produce at least {TITLE_COUNT} titles in the catalog array.",
+            "Hub constraints: 6-10 hubs total. Every hub must have at least 20 titles. No single hub may have more than 30% of all titles.",
+            "Hub ids must be lowercase slug-style (e.g. 'understanding-basics', 'types-of-spread').",
+            "Every title in catalog MUST reference a hub id that exists in taxonomy.hubs.",
         ],
     }
 
@@ -732,8 +744,13 @@ def main(site_slug: str = "", force_reset: bool = False):
     if not base_url:
         base_url = (os.getenv("BOOTSTRAP_BASE_URL") or "https://YOUR-SITE.pages.dev/").strip()
 
-    # FIX: Sanitize hubs — LLM sometimes returns a dict, a string, or malformed list items.
-    raw_hubs = out.get("hubs")
+    # FIX: Sanitize hubs — LLM may return in taxonomy.hubs (new) or top-level hubs (old).
+    raw_hubs = None
+    taxonomy = out.get("taxonomy")
+    if isinstance(taxonomy, dict):
+        raw_hubs = taxonomy.get("hubs")
+    if not raw_hubs:
+        raw_hubs = out.get("hubs")
     hubs = None
     if isinstance(raw_hubs, list) and raw_hubs:
         # Validate each hub is a dict with id and label
@@ -766,7 +783,7 @@ def main(site_slug: str = "", force_reset: bool = False):
     # Back-compat: if older schema provides titles_pool, keep those (hub will be chosen during generation)
     raw_titles = out.get("titles_pool") or []
     if isinstance(raw_titles, list) and raw_titles and not catalog:
-        # Older behavior
+        # Older behavior — flat titles_pool without hub assignments
         titles_from_llm = raw_titles
         titles_from_llm = [t.strip() for t in titles_from_llm if isinstance(t, str) and t.strip()]
         titles_from_llm = _normalize_quotes_list(titles_from_llm)
@@ -774,6 +791,7 @@ def main(site_slug: str = "", force_reset: bool = False):
         titles_from_llm = [_titlecase_for_display(t) for t in titles_from_llm]
         if len(titles_from_llm) > TITLE_COUNT:
             titles_from_llm = titles_from_llm[:TITLE_COUNT]
+        titles = titles_from_llm
         title_hub_overrides: dict[str, str] = {}
     else:
         # New behavior: flatten catalog to a titles list, and keep hub overrides
@@ -824,29 +842,47 @@ def main(site_slug: str = "", force_reset: bool = False):
 
         ok, issues = _hub_balance_ok(counts, len(cleaned))
         if not ok:
+            print(f"[bootstrap] Hub balance issues: {issues}")
             print("[bootstrap] Hub balance check failed. Asking model to rebalance…")
-            fix_prompt = f"""
-You previously produced a catalog of titles assigned to hubs, but the distribution violates constraints.
+            # Serialize current state for the rebalance prompt
+            rebalance_data = json.dumps({
+                'taxonomy': out.get('taxonomy', {}),
+                'catalog': [{"title": t, "hub": h} for t, h in cleaned]
+            }, ensure_ascii=False)
+            fix_prompt = f"""You previously produced a catalog of titles assigned to hubs, but the distribution violates constraints.
 Constraints:
-- 6–10 hubs total
+- 6-10 hubs total
 - every hub >= 20 titles
 - no hub > 30% of titles
 - keep the SAME set of titles; do not invent new titles and do not delete titles
 Return strict JSON with:
-- taxonomy.hubs (id, label, description)
-- catalog: array of {{title, hub}} using ONLY hub ids listed
+- taxonomy (object with hubs array: id, label, description)
+- catalog (array of objects with title and hub fields, using ONLY hub ids from taxonomy)
 Here is the current taxonomy and catalog:
-{json.dumps({'taxonomy': out.get('taxonomy', {}), 'catalog': cleaned}, ensure_ascii=False)}
+{rebalance_data}
 """
-            out2 = kimi_json(
-                prompt=fix_prompt,
-                required_json={
-                    "taxonomy": {"hubs": [{"id": "work-boundaries", "label": "Work & Boundaries", "description": "…"}]},
-                    "catalog": [{"title": "A guide title", "hub": "work-boundaries"}],
-                },
-            )
+            try:
+                out2 = kimi_json(
+                    system="You are a careful site-bootstrapper. Output a single valid JSON object only.",
+                    user=fix_prompt,
+                    temperature=TEMPERATURE,
+                    max_tokens=MAX_OUTPUT_TOKENS,
+                )
+            except Exception as e:
+                print(f"[bootstrap] Rebalance failed ({e}), using unbalanced catalog.")
+                out2 = {}
             if isinstance(out2, dict) and out2.get("catalog") and out2.get("taxonomy"):
                 out = out2
+                # Update hubs from rebalanced taxonomy
+                rebal_hubs = out2.get("taxonomy", {}).get("hubs", [])
+                if isinstance(rebal_hubs, list) and len(rebal_hubs) >= 3:
+                    valid = []
+                    for h in rebal_hubs:
+                        if isinstance(h, dict) and h.get("id") and h.get("label"):
+                            valid.append({"id": str(h["id"]).strip(), "label": str(h["label"]).strip()})
+                    if len(valid) >= 3:
+                        hubs = valid
+                        print(f"[bootstrap] Rebalanced to {len(hubs)} hubs")
                 cleaned = []
                 for item in out.get("catalog") or []:
                     if isinstance(item, dict):
@@ -867,6 +903,17 @@ Here is the current taxonomy and catalog:
 
         titles = [_titlecase_for_display(t) for (t, _) in cleaned]
         title_hub_overrides = {t: h for (t, h) in cleaned}
+
+    # Log catalog summary
+    if title_hub_overrides:
+        hub_counts: dict[str, int] = {}
+        for h in title_hub_overrides.values():
+            hub_counts[h] = hub_counts.get(h, 0) + 1
+        print(f"[bootstrap] Catalog written: {len(titles)} titles with hub assignments")
+        for hid, cnt in sorted(hub_counts.items(), key=lambda x: x[0]):
+            print(f"  Hub '{hid}': {cnt} titles")
+    else:
+        print(f"[bootstrap] Titles written: {len(titles)} (no hub assignments — old format fallback)")
 
     wc_min, wc_max, ideal_min, ideal_max = 900, 1900, 1100, 1600
 
