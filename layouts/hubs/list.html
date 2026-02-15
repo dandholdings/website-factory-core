@@ -1,21 +1,46 @@
 {{ define "main" }}
 {{ $hub := .File.Dir | strings.TrimSuffix "/" | path.Base }}
+{{ $allPages := where site.RegularPages "Params.hub" $hub }}
 
-<section class="list">
+<section class="list hub-landing">
   <header class="page-header">
     <h1 class="page-title">{{ .Title }}</h1>
     {{ with .Params.description }}<p class="muted">{{ . }}</p>{{ end }}
   </header>
 
+  {{/* Hub intro from _index.md content */}}
+  {{ with .Content }}
+    <div class="hub-intro content">{{ . }}</div>
+  {{ end }}
+
   {{ partial "ad-slot.html" (dict "ctx" . "slot" "hub_top") }}
 
-  <div class="cards">
-    {{ range where site.RegularPages "Params.hub" $hub }}
-      <a class="card" href="{{ .RelPermalink }}">
-        <div class="card-title">{{ .Title }}</div>
-        {{ with .Params.summary }}<div class="card-summary">{{ . }}</div>{{ end }}
-      </a>
-    {{ end }}
+  {{/* Start here: first 3 pages */}}
+  {{ if ge (len $allPages) 3 }}
+  <div class="hub-section">
+    <h2>Start here</h2>
+    <div class="cards">
+      {{ range first 3 $allPages }}
+        <a class="card card--start" href="{{ .RelPermalink }}">
+          <div class="card-title">{{ .Title }}</div>
+          {{ with .Params.summary }}<div class="card-summary">{{ . }}</div>{{ end }}
+        </a>
+      {{ end }}
+    </div>
+  </div>
+  {{ end }}
+
+  {{/* All pages */}}
+  <div class="hub-section">
+    <h2>All guides</h2>
+    <div class="cards">
+      {{ range $allPages }}
+        <a class="card" href="{{ .RelPermalink }}">
+          <div class="card-title">{{ .Title }}</div>
+          {{ with .Params.summary }}<div class="card-summary">{{ . }}</div>{{ end }}
+        </a>
+      {{ end }}
+    </div>
   </div>
 
   {{ partial "ad-slot.html" (dict "ctx" . "slot" "hub_bottom") }}

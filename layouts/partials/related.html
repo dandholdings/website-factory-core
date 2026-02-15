@@ -1,33 +1,52 @@
-{{/* Related links: prefer Hugo's Related content API. Fallback to same-hub pages. */}}
+{{/* Related links: deduplicated, no self-links. Related results first, then same-hub fallback. */}}
 {{ $limit := default 6 .Site.Params.relatedLimit }}
-{{ $related := slice }}
+{{ $self := .RelPermalink }}
+{{ $seen := dict }}
+{{ $unique := slice }}
 
-{{/* Try Hugo's built-in Related API first */}}
+{{/* 1) Hugo's built-in Related API — dedup + exclude self */}}
 {{ with site.RegularPages.Related . }}
-  {{ $related = . | first $limit }}
-{{ end }}
-
-{{/* If too few related, supplement with same-hub pages */}}
-{{ if and (lt (len $related) 3) .Params.hub }}
-  {{ $hub := .Params.hub }}
-  {{ $self := .RelPermalink }}
-  {{ $sameHub := where site.RegularPages "Params.hub" $hub }}
-  {{ $filtered := slice }}
-  {{ range $sameHub }}
-    {{ if ne .RelPermalink $self }}
-      {{ $filtered = $filtered | append . }}
+  {{ range . }}
+    {{ if and (ne .RelPermalink $self) (not (index $seen .RelPermalink)) }}
+      {{ $unique = $unique | append . }}
+      {{ $seen = merge $seen (dict .RelPermalink true) }}
     {{ end }}
   {{ end }}
-  {{ $need := sub $limit (len $related) }}
-  {{ $extra := shuffle $filtered | first $need }}
-  {{ $related = $related | append $extra }}
 {{ end }}
 
-{{ if ge (len $related) 1 }}
+{{/* 2) If too few, supplement with same-hub pages (also deduped) */}}
+{{ if and (lt (len $unique) $limit) .Params.hub }}
+  {{ $hub := .Params.hub }}
+  {{ $sameHub := where site.RegularPages "Params.hub" $hub }}
+  {{ $extra := shuffle $sameHub }}
+  {{ range $extra }}
+    {{ if ge (len $unique) $limit }}
+      {{/* Stop once we hit the limit */}}
+    {{ else if and (ne .RelPermalink $self) (not (index $seen .RelPermalink)) }}
+      {{ $unique = $unique | append . }}
+      {{ $seen = merge $seen (dict .RelPermalink true) }}
+    {{ end }}
+  {{ end }}
+{{ end }}
+
+{{/* 3) If still short, pull from any RegularPages (cross-hub) */}}
+{{ if lt (len $unique) 3 }}
+  {{ $any := shuffle site.RegularPages }}
+  {{ range $any }}
+    {{ if ge (len $unique) $limit }}
+    {{ else if and (ne .RelPermalink $self) (not (index $seen .RelPermalink)) }}
+      {{ $unique = $unique | append . }}
+      {{ $seen = merge $seen (dict .RelPermalink true) }}
+    {{ end }}
+  {{ end }}
+{{ end }}
+
+{{ $final := first $limit $unique }}
+{{ if ge (len $final) 1 }}
 <section class="related">
   <h2>Related guides</h2>
   <ul>
-    {{ range first $limit $related }}
+    {{ range $final }}
       <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>
     {{ end }}
   </ul>

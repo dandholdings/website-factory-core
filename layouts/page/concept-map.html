@@ -13,38 +13,53 @@
     {{/* Render any custom markdown content from the .md file */}}
     {{ .Content }}
 
-    {{/* Auto-generated concept map from site taxonomy */}}
+    {{/* Auto-generated hub map from site taxonomy */}}
     {{ $hubs := slice }}
     {{ with site.Data.site }}{{ with .taxonomy }}{{ with .hubs }}{{ $hubs = . }}{{ end }}{{ end }}{{ end }}
 
     {{ if gt (len $hubs) 0 }}
-    <section class="concept-overview">
-      <h2>Topic overview</h2>
-      <p>This site covers {{ len $hubs }} core topic areas. Each area contains guides that explore specific questions, definitions, and examples. Select any topic below to see all related guides.</p>
+
+    {{/* Best starting points: one "entry" page from each hub */}}
+    {{ $starters := slice }}
+    {{ range $hubs }}
+      {{ $pages := where site.RegularPages "Params.hub" .id }}
+      {{ if gt (len $pages) 0 }}
+        {{ $starters = $starters | append (index $pages 0) }}
+      {{ end }}
+    {{ end }}
+
+    {{ if gt (len $starters) 0 }}
+    <section class="map-starters">
+      <h2>Best starting points</h2>
+      <p>Not sure where to begin? These guides are a good entry point for each topic area.</p>
+      <div class="cards">
+        {{ range $starters }}
+          <a class="card card--start" href="{{ .RelPermalink }}">
+            <div class="card-title">{{ .Title }}</div>
+            {{ with .Params.hub }}<div class="card-summary">{{ . | humanize }}</div>{{ end }}
+          </a>
+        {{ end }}
+      </div>
+    </section>
+    {{ end }}
+
+    <section class="map-hubs">
+      <h2>Topic areas</h2>
+      <p>{{ $brand }} covers {{ len $hubs }} core topic areas. Each area contains guides exploring specific questions, definitions, and examples.</p>
 
       <div class="concept-grid">
         {{ range $hubs }}
           {{ $pages := where site.RegularPages "Params.hub" .id }}
-          {{ if gt (len $pages) 0 }}
           <div class="concept-hub">
             <h3><a href="{{ (printf "/hubs/%s/" .id) | relURL }}">{{ .label }}</a></h3>
             {{ with .description }}<p class="hub-desc">{{ . }}</p>{{ end }}
-            <ul class="concept-pages">
-              {{ range first 8 $pages }}
-                <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>
-              {{ end }}
-              {{ if gt (len $pages) 8 }}
-                <li class="more"><a href="{{ (printf "/hubs/%s/" .id) | relURL }}">… and {{ sub (len $pages) 8 }} more</a></li>
-              {{ end }}
-            </ul>
+            <p class="hub-count">{{ len $pages }} guides — <a href="{{ (printf "/hubs/%s/" .id) | relURL }}">explore all →</a></p>
           </div>
-          {{ end }}
         {{ end }}
       </div>
     </section>
 
-    {{/* Cross-references: show how hubs relate */}}
-    <section class="concept-connections">
+    <section class="map-connections">
       <h2>How these topics connect</h2>
       <p>Many guides span multiple areas. A question about one topic often touches on others. The links within each guide help you move between related ideas without losing context.</p>
       <p>Start with any topic that interests you. Each guide includes links to related pages, so you can explore naturally from any starting point.</p>

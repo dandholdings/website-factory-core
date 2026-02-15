@@ -393,6 +393,38 @@ def validate_page(md_path: Path, cfg: dict) -> Tuple[bool, List[str], int, int]:
     else:
         scored_pass += 1
 
+    # 6b) Duplicate internal links
+    scored_total += 1
+    unique_internal = set(internal_links)
+    if len(unique_internal) < len(internal_links):
+        dup_count = len(internal_links) - len(unique_internal)
+        failures.append(f"Duplicate internal links found ({dup_count} duplicates).")
+    else:
+        scored_pass += 1
+
+    # 6c) Self-links
+    page_slug = fm.get("slug") or md_path.parent.name
+    self_url = f"/pages/{page_slug}/"
+    scored_total += 1
+    if self_url in internal_links:
+        failures.append(f"Self-link detected: {self_url}")
+    else:
+        scored_pass += 1
+
+    # 6d) Contextual (in-body) links — at least 3 outside the Related section
+    scored_total += 1
+    related_heading_pat = re.compile(r"^##\s+Related topics and deeper reading\s*$", re.M)
+    related_m = related_heading_pat.search(body)
+    if related_m:
+        body_before_related = body[:related_m.start()]
+    else:
+        body_before_related = body
+    contextual_link_count = len(re.findall(r"\[([^\]]+)\]\((/pages/[a-z0-9-]+/)\)", body_before_related))
+    if contextual_link_count < 3:
+        failures.append(f"Too few contextual (in-body) links: {contextual_link_count} (min 3).")
+    else:
+        scored_pass += 1
+
     scored_total += 1
     if any("click here" in (t or "").lower() for t, _ in links):
         failures.append('Link text "click here" is forbidden.')
@@ -423,10 +455,29 @@ def validate_page(md_path: Path, cfg: dict) -> Tuple[bool, List[str], int, int]:
             if (u or "").startswith("/"):
                 related_links.append((t, u))
 
+    # Check for duplicates within related section
+    related_urls = [u for _, u in related_links]
+    scored_total += 1
+    if len(set(related_urls)) < len(related_urls):
+        failures.append("Duplicate links in Related topics section.")
+    else:
+        scored_pass += 1
+
     related_min = min(3, min_links)  # At least 3 in related section
     scored_total += 1
     if len(related_links) < related_min:
         failures.append(f'Related topics section must include at least {related_min} internal links (found {len(related_links)}).')
+    else:
+        scored_pass += 1
+
+    # 6e) Unique payload block — exactly one must exist
+    scored_total += 1
+    payload_headings = re.findall(
+        r'^### (?:Quick-start snapshot|If–then chooser|Self-check checklist|Starter templates)\s*$',
+        body, re.MULTILINE
+    )
+    if len(payload_headings) != 1:
+        failures.append(f"Unique payload block: expected 1, found {len(payload_headings)}.")
     else:
         scored_pass += 1
 

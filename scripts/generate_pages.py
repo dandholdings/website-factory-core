@@ -577,7 +577,10 @@ def call_kimi(system: str, prompt: str) -> dict:
     return kimi_json(system=system, user=prompt, temperature=TEMPERATURE, max_tokens=MAX_OUTPUT_TOKENS)
 
 def build_internal_link_hints(content_root="content/pages", limit: int = 40) -> str:
-    """Build a curated list of existing internal links for the model to use."""
+    """Build a curated list of existing internal links for the model to use.
+    
+    Groups by hub so the model can prioritise same-hub links.
+    """
     root = Path(content_root)
     items = []
     for md in root.glob("*/index.md"):
@@ -588,10 +591,22 @@ def build_internal_link_hints(content_root="content/pages", limit: int = 40) -> 
         fm, _ = read_markdown_frontmatter(raw)
         slug = fm.get("slug") or md.parent.name
         title = fm.get("title") or slug.replace("-", " ").title()
-        items.append((str(title).strip(), str(slug).strip()))
-    items = sorted(items, key=lambda x: x[1])
+        hub = fm.get("hub") or "general"
+        items.append((str(title).strip(), str(slug).strip(), str(hub).strip()))
+    items = sorted(items, key=lambda x: x[2])  # group by hub
     items = items[:limit]
-    return "\n".join([f"- [{t}](/pages/{s}/)" for t, s in items if t and s])
+    
+    # Group by hub for clearer model instructions
+    by_hub = {}
+    for t, s, h in items:
+        if t and s:
+            by_hub.setdefault(h, []).append(f"- [{t}](/pages/{s}/)")
+    
+    lines = []
+    for hub_id in sorted(by_hub.keys()):
+        lines.append(f"### Hub: {hub_id}")
+        lines.extend(by_hub[hub_id])
+    return "\n".join(lines)
 
 
 def _generate_sibling_link_hints(titles_pool_path: Path, limit: int = 20) -> str:
@@ -689,15 +704,34 @@ Use these H2 sections IN THIS EXACT ORDER (do NOT reorder, do NOT skip any, do N
 
 CRITICAL: Use each H2 heading EXACTLY ONCE. Do NOT repeat any heading. The article must have exactly {len(outline)} H2 sections, no more, no less.
 
+=== UNIQUE PAYLOAD BLOCK (CRITICAL — pages rejected without this) ===
+
+Immediately after the "## Intro" section (before "## Definitions and key terms"), you MUST insert exactly one "payload block" that is specific to the topic. Choose the best format:
+
+A) "Quick-start snapshot" — 5-7 short bullet points summarising the key takeaways
+B) "If X, try Y" chooser — a markdown table with 3-6 rows matching situations to approaches
+C) "Self-check checklist" — 7-12 items as a checkbox-style list using "- [ ]" syntax
+D) "Starter templates" — 3-5 short template sentences people can adapt
+
+Rules for the payload block:
+- Start it with an H3 heading: ### Quick-start snapshot, ### If–then chooser, ### Self-check checklist, or ### Starter templates
+- 80-180 words
+- Must include at least 1 internal link to another page in the same hub
+- Must be specific to the topic (not generic advice)
+- Must NOT reuse wording from other sections
+
 === HARD RULES (violation = rejected page) ===
 
 INTERNAL LINKS (CRITICAL — pages are rejected if this fails):
 - You MUST include at least 6 internal links total in body_md.
 - CONTEXTUAL LINKS: Place at least 3 internal links naturally within paragraph text across the body sections (Intro through Common misconceptions). These must flow naturally in-sentence, e.g. "This pattern resembles [emotional mirroring in groups](/pages/emotional-mirroring-in-groups/) and can intensify over time." Do NOT cluster links together — spread them across different sections.
 - RELATED SECTION: The "Related topics and deeper reading" section should include 3+ additional internal links as a bulleted list.
+- HUB PREFERENCE: Use 3-4 links to pages in the SAME hub + 1-2 links to pages in a different hub. This creates strong topical clusters.
 - Use ONLY relative URLs in this format: [anchor text](/pages/slug-here/)
 - Anchor text must be descriptive (NEVER "click here", "learn more", "read more").
 - ZERO external links allowed. No https:// URLs anywhere.
+- NEVER link to the same target twice. Every link URL must be unique.
+- NEVER link to the page itself (self-link).
 
 FORBIDDEN LANGUAGE (any occurrence = rejected):
 - NO dates or time words. BANNED WORDS: "recent", "recently", "currently", "nowadays", "today", "now", "this year", "last year", "in 20XX", "at the time of writing", "as of", "latest", "emerging", "new research", "growing", "increasingly", "modern", "contemporary". Do not use ANY year numbers (2020, 2024, 2025, etc).
@@ -938,9 +972,62 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
     data["body_md"] = body
 
     # Pre-write validation: internal links (need 6+: 3 contextual + 3 in related)
-    internal_link_count = len(re.findall(r'\[.*?\]\(/pages/[a-z0-9-]+/\)', body))
+    all_link_matches = re.findall(r'\[([^\]]*)\]\((/pages/[a-z0-9-]+/)\)', body)
+    internal_link_count = len(all_link_matches)
     if internal_link_count < 6:
         print(f"  Too few internal links: {internal_link_count} (need 6+)")
+        return False, {}
+
+    # Check for duplicate link targets
+    link_urls = [url for _, url in all_link_matches]
+    unique_urls = set(link_urls)
+    if len(unique_urls) < len(link_urls):
+        dupes = [u for u in unique_urls if link_urls.count(u) > 1]
+        print(f"  Duplicate internal links: {dupes[:3]}")
+        return False, {}
+
+    # Check for self-links
+    page_slug_from_data = slugify(data.get("title", ""))
+    self_url_patterns = [f"/pages/{page_slug_from_data}/"]
+    if any(url in self_url_patterns for url in link_urls):
+        print(f"  Self-link detected — rejected")
+        return False, {}
+
+    # Split contextual (in-body) vs related section links
+    related_heading_pat = re.compile(r'^## Related topics and deeper reading\s*$', re.MULTILINE)
+    related_m = related_heading_pat.search(body)
+    if related_m:
+        body_before_related = body[:related_m.start()]
+        related_section_text = body[related_m.end():]
+        # Trim related section at next H2
+        next_h2 = re.search(r'^## ', related_section_text, re.MULTILINE)
+        if next_h2:
+            related_section_text = related_section_text[:next_h2.start()]
+    else:
+        body_before_related = body
+        related_section_text = ""
+
+    contextual_links = re.findall(r'\[.*?\]\(/pages/[a-z0-9-]+/\)', body_before_related)
+    related_links = re.findall(r'\[.*?\]\(/pages/[a-z0-9-]+/\)', related_section_text)
+
+    if len(contextual_links) < 3:
+        print(f"  Too few contextual (in-body) links: {len(contextual_links)} (need 3+)")
+        return False, {}
+
+    if len(related_links) < 3:
+        print(f"  Too few related section links: {len(related_links)} (need 3+)")
+        return False, {}
+
+    # Pre-write validation: payload block exists (exactly one)
+    payload_headings = re.findall(
+        r'^### (?:Quick-start snapshot|If–then chooser|Self-check checklist|Starter templates)\s*$',
+        body, re.MULTILINE
+    )
+    if len(payload_headings) == 0:
+        print(f"  Missing unique payload block (no ### Quick-start/If-then/Checklist/Templates heading)")
+        return False, {}
+    if len(payload_headings) > 1:
+        print(f"  Multiple payload blocks found ({len(payload_headings)}) — need exactly 1")
         return False, {}
 
     # Pre-write validation: no external links
@@ -1279,7 +1366,7 @@ def main():
     # Provide internal link candidates so the model can reliably include them
     link_hints = build_internal_link_hints(CONTENT_ROOT, limit=40)
     if link_hints:
-        page_prompt = page_prompt + f"\n\n=== AVAILABLE INTERNAL LINKS (use at least 6 from this list) ===\n{link_hints}\n\nYou MUST use links from this list. Do NOT invent slugs. Do NOT use external URLs.\n"
+        page_prompt = page_prompt + f"\n\n=== AVAILABLE INTERNAL LINKS (grouped by hub — prefer same-hub links) ===\n{link_hints}\n\nYou MUST use links from this list. Prefer 3-4 links from YOUR hub + 1-2 from other hubs. Do NOT invent slugs. Do NOT use external URLs.\n"
     else:
         # Fresh bootstrap: no pages exist yet. Generate plausible sibling slugs from the titles pool.
         sibling_slugs = _generate_sibling_link_hints(TITLES_POOL_PATH, limit=20)
