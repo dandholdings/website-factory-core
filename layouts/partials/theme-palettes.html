@@ -1,0 +1,42 @@
+{{/*
+  Deterministic palette selection.
+  1. If data/site.yaml defines theme.primary/accent/link → use those (config override).
+  2. Otherwise, hash the site title to pick one of 16 calm palettes.
+  Outputs: sets data-palette attribute on <html> via inline script in head.
+*/}}
+
+{{/* Check for config override */}}
+{{ $hasOverride := false }}
+{{ $overPrimary := "" }}{{ $overAccent := "" }}{{ $overLink := "" }}
+{{ with site.Data.site }}{{ with .theme }}
+  {{ with .primary }}{{ $overPrimary = . }}{{ $hasOverride = true }}{{ end }}
+  {{ with .accent }}{{ $overAccent = . }}{{ end }}
+  {{ with .link }}{{ $overLink = . }}{{ end }}
+{{ end }}{{ end }}
+{{ with .Site.Params.theme }}
+  {{ if not $hasOverride }}
+    {{ with .primary }}{{ $overPrimary = . }}{{ $hasOverride = true }}{{ end }}
+    {{ with .accent }}{{ $overAccent = . }}{{ end }}
+    {{ with .link }}{{ $overLink = . }}{{ end }}
+  {{ end }}
+{{ end }}
+
+{{ if $hasOverride }}
+<style>
+:root{
+  {{ with $overPrimary }}--primary:{{ . }};{{ end }}
+  {{ with $overAccent }}--accent:{{ . }};{{ end }}
+  {{ with $overLink }}--link:{{ . }};{{ end }}
+}
+</style>
+{{ else }}
+{{/* Deterministic palette: hash site title to 0-15 */}}
+{{ $title := .Site.Title }}
+{{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $title = . }}{{ end }}{{ end }}{{ end }}
+{{ $hash := 0 }}
+{{ range (split $title "") }}
+  {{ $hash = add $hash (len .) }}
+{{ end }}
+{{ $index := mod $hash 16 }}
+<script>document.documentElement.setAttribute("data-palette","{{ $index }}");</script>
+{{ end }}

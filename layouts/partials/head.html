@@ -189,31 +189,12 @@
   {{ end }}
 {{ end }}
 
-{{/* Dynamic theme pack CSS */}}
-{{ $pack := "calm-paper" }}
-{{ with site.Params.theme }}{{ with .pack }}{{ $pack = . }}{{ end }}{{ end }}
-{{ with site.Data.site }}{{ with .theme }}{{ with .pack }}{{ $pack = . }}{{ end }}{{ end }}{{ end }}
+{{/* Google Fonts: Inter */}}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 
 <link rel="stylesheet" href="/css/site.css">
 
-{{/* Config-driven CSS variable overrides (from data/site.yaml or hugo.yaml params) */}}
-{{ $primary := "" }}{{ $accent := "" }}{{ $bgOverride := "" }}
-{{ with site.Data.site }}{{ with .theme }}
-  {{ with .primary }}{{ $primary = . }}{{ end }}
-  {{ with .accent }}{{ $accent = . }}{{ end }}
-  {{ with .bg }}{{ $bgOverride = . }}{{ end }}
-{{ end }}{{ end }}
-{{ with .Site.Params.theme }}
-  {{ if not $primary }}{{ with .primary }}{{ $primary = . }}{{ end }}{{ end }}
-  {{ if not $accent }}{{ with .accent }}{{ $accent = . }}{{ end }}{{ end }}
-  {{ if not $bgOverride }}{{ with .bg }}{{ $bgOverride = . }}{{ end }}{{ end }}
-{{ end }}
-{{ if or $primary $accent $bgOverride }}
-<style>
-:root{
-  {{ with $primary }}--link:{{ . }};--accent:{{ . }};{{ end }}
-  {{ with $accent }}--accent:{{ . }};{{ end }}
-  {{ with $bgOverride }}--bg:{{ . }};{{ end }}
-}
-</style>
-{{ end }}
+{{/* Deterministic palette or config override */}}
+{{ partial "theme-palettes.html" . }}
