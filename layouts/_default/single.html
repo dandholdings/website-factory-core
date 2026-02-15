@@ -1,16 +1,22 @@
 {{ define "main" }}
 <article class="page">
   <header class="page-header">
-
-    
     {{ partial "breadcrumbs.html" . }}
-<h1 class="page-title">{{ .Title }}</h1>
+    <h1 class="page-title">{{ .Title }}</h1>
     {{ with .Params.summary }}
       <div class="lede"><strong>{{ . }}</strong></div>
     {{ end }}
+    <div class="page-meta">
+      <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "Jan 2, 2006" }}</time>
+      <span class="meta-sep">·</span>
+      <span>{{ .ReadingTime }} min read</span>
+      {{ with .Params.hub }}
+        <span class="meta-sep">·</span>
+        <a class="meta-hub" href="{{ (printf "/hubs/%s/" .) | relURL }}">{{ . | humanize }}</a>
+      {{ end }}
+    </div>
   </header>
 
-  {{/* Above-the-fold ad: shows only when ads are enabled. */}}
   {{ partial "ad-slot.html" (dict "ctx" . "slot" "in_content_1") }}
 
   <div class="page-body content">
@@ -19,7 +25,6 @@
 
   {{ partial "ad-slot.html" (dict "ctx" . "slot" "in_content_2") }}
 
-  {{/* Related links remain in main for mobile; sidebar also includes them on desktop. */}}
   {{ partial "related.html" . }}
 
   {{ partial "ad-slot.html" (dict "ctx" . "slot" "in_content_3") }}

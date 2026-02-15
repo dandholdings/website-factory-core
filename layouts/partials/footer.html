@@ -1,5 +1,8 @@
 <footer class="site-footer">
   <div class="container footer-inner">
+    {{ $brand := .Site.Title }}
+    {{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $brand = . }}{{ end }}{{ end }}{{ end }}
+
     <div class="footer-links">
       <a href="{{ "/about/" | relURL }}">About</a>
       <a href="{{ "/editorial-policy/" | relURL }}">Editorial Policy</a>
@@ -16,7 +19,7 @@
     </p>
 
     <p class="muted small">
-      © {{ now.Format "2006" }} {{ .Site.Title }}
+      © {{ now.Format "2006" }} {{ $brand }}
     </p>
   </div>
 </footer>
