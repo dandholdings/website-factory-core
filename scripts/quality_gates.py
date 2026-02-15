@@ -216,11 +216,9 @@ DEFAULT_NO_DATES = [
     r"\bcurrently\b",
     r"\bthis\s+year\b",
     r"\blast\s+year\b",
-    # FIX: "today" and "now" are too aggressive — they appear in phrases like
-    # "the world today" or "know now that". Use stricter patterns.
-    r"(?<!\bto)\btoday\b",  # avoid "up to today" false positives but catch standalone
-    # "now" only at sentence boundaries (standalone usage)
-    r"(?:^|[.!?]\s+)[A-Z][^.]*\bnow\b",
+    r"(?<!\bto)\btoday\b",  # avoid "up to today" but catch standalone
+    r"\bright\s+now\b",
+    r"\bas\s+of\s+now\b",
 ]
 
 DEFAULT_NO_PRICES = [

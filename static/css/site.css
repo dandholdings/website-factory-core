@@ -153,63 +153,51 @@ a:hover{text-decoration:underline}
 .theme-toggle:focus{outline:2px solid color-mix(in srgb, var(--link) 55%, transparent);outline-offset:2px}
 
 /* ===== INLINE SEARCH ===== */
-.site-search{position:relative}
-
-.search-bar{
+.search-wrap{
+  position:relative;
   display:flex;
   align-items:center;
-  gap:6px;
+  gap:7px;
   background:var(--card);
   border:1px solid var(--border);
   border-radius:999px;
-  padding:6px 12px;
-  cursor:text;
+  padding:7px 14px;
+  margin-left:auto;
+  flex:1 1 0;
+  max-width:340px;
+  min-width:120px;
   transition:border-color .15s;
 }
-.search-bar:focus-within{border-color:var(--accent)}
+.search-wrap:focus-within{border-color:var(--accent)}
 
 .search-icon{color:var(--muted);flex-shrink:0}
 
-.search-bar input{
+.search-wrap input{
   border:none;
   outline:none;
   background:transparent;
   color:var(--text);
   font-size:.9rem;
   font-family:inherit;
-  width:140px;
-  transition:width .2s;
+  width:100%;
+  min-width:0;
 }
-.search-bar input:focus{width:200px}
-.search-bar input::placeholder{color:var(--muted)}
-
-.search-kbd{
-  display:none;
-  font-family:inherit;
-  font-size:.7rem;
-  background:var(--bg);
-  border:1px solid var(--border);
-  border-radius:4px;
-  padding:1px 5px;
-  color:var(--muted);
-  line-height:1.2;
-}
-@media(min-width:820px){.search-kbd{display:inline-block}}
+.search-wrap input::placeholder{color:var(--muted)}
 
 .search-results{
   position:absolute;
-  top:100%;
+  top:calc(100% + 6px);
+  left:0;
   right:0;
-  width:min(400px,85vw);
   list-style:none;
-  margin:6px 0 0;
+  margin:0;
   padding:0;
   background:var(--bg);
   border:1px solid var(--border);
   border-radius:var(--radius);
   max-height:60vh;
   overflow-y:auto;
-  box-shadow:0 8px 24px rgba(0,0,0,.12);
+  box-shadow:0 8px 24px rgba(0,0,0,.14);
   z-index:20;
 }
 .search-results:empty{display:none}
@@ -218,11 +206,10 @@ a:hover{text-decoration:underline}
 .search-results li a:hover,.search-results li a:focus{background:var(--card)}
 .search-results li a strong{display:block;font-size:.93rem;margin-bottom:2px}
 .search-results li a span{display:block;font-size:.82rem;color:var(--muted);line-height:1.35}
-.search-empty{padding:14px 16px;color:var(--muted);font-size:.9rem;text-align:center}
+.sr-empty{padding:12px 14px;color:var(--muted);font-size:.88rem;text-align:center}
 
 @media(max-width:819px){
-  .search-bar input{width:90px}
-  .search-bar input:focus{width:130px}
+  .search-wrap{max-width:180px}
 }
 
 /* ===== PAGE CONTENT ===== */
