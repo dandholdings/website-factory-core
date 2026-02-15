@@ -1,12 +1,4 @@
 {{ define "main" }}
-{{ $brand := .Site.Title }}
-{{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $brand = . }}{{ end }}{{ end }}{{ end }}
-{{ $email := "" }}
-{{ with site.Data.site }}{{ with .site }}{{ with .contact_email }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
-{{ if not $email }}{{ with .Site.Params.factory }}{{ with .contactEmail }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
-{{ $niche := "" }}
-{{ with site.Data.site }}{{ with .site }}{{ with .niche }}{{ $niche = . }}{{ end }}{{ end }}{{ end }}
-
 <article class="page">
   <header class="page-header">
     {{ partial "breadcrumbs.html" . }}
@@ -15,28 +7,6 @@
   </header>
 
   <div class="page-body content">
-    <h2>What this site provides</h2>
-    <p><strong>{{ $brand }}</strong> publishes structured, evergreen guides on {{ if $niche }}{{ lower $niche }}{{ else }}its subject area{{ end }}. Each guide is organised around a single question or concept and includes clear definitions, practical context, illustrative examples, and a neutral summary. The content is designed to be accessible to general audiences without assuming prior knowledge or expertise.</p>
-    <p>Guides are grouped into topic hubs that connect related questions. This structure allows readers to explore a subject progressively, moving between foundational concepts and more specific situations at their own pace.</p>
-
-    <h2>Informational and evergreen</h2>
-    <p>All content on this site is informational and educational in nature. Guides are written to remain relevant over time rather than responding to current events or trends. The site avoids opinion, commentary, and advice in favour of neutral explanations that present information clearly and let readers draw their own conclusions.</p>
-
-    <h2>What this site does not do</h2>
-    <p>{{ $brand }} does not provide medical, psychological, legal, financial, or any other form of professional advice. It does not diagnose conditions, recommend treatments, or suggest specific courses of action. If you require professional guidance, please consult a qualified practitioner in your area.</p>
-
-    <h2>How content is produced</h2>
-    <p>Content is developed using structured research frameworks and automated editorial tools. Each guide follows a consistent outline that ensures key aspects of a topic are covered systematically. Guides are reviewed for clarity, neutrality, factual consistency, and adherence to the site's editorial standards before publication.</p>
-    <p>For a detailed explanation of how content is created, reviewed, and maintained, please read the <a href="{{ "/editorial-policy/" | relURL }}">editorial policy</a>.</p>
-
-    <h2>The {{ $brand }} editorial team</h2>
-    <p>Content is produced and maintained by the {{ $brand }} editorial team. The team's focus is on accuracy, clarity, and consistency rather than opinion or commentary. All published guides reflect the editorial standards described in this site's policies.</p>
-
-    {{ if $email }}
-    <h2>Get in touch</h2>
-    <p>If you spot an error, have feedback, or would like to suggest a topic, you can reach us at <a href="mailto:{{ $email }}">{{ $email }}</a>. Please note that we are unable to provide personal advice or respond to individual enquiries about specific situations.</p>
-    {{ end }}
-
     {{ .Content }}
   </div>
 
