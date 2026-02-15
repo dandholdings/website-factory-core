@@ -866,8 +866,8 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
         r'\bcurrently\b',
         r'\bthis\s+year\b',
         r'\blast\s+year\b',
-        r'(?<!\bto)\btoday\b',          # "today" but not "up to today"
-        r'(?:^|[.!?]\s+)[A-Z][^.]*\bnow\b',  # "now" at sentence start
+        r'\btoday\b',                   # no place in evergreen content
+        r'\bnow\b',                     # no place in evergreen content
     ]
     for pat in recency_patterns:
         m = re.search(pat, body, re.MULTILINE)
