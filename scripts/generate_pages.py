@@ -103,7 +103,7 @@ def _safe_int(val, default: int) -> int:
 GEN_VERSION: str = os.getenv("GEN_VERSION", "1")
 FACTORY_MODE: str = (os.getenv("FACTORY_MODE", "generate") or "generate").strip().lower()
 BACKFILL_METADATA: bool = (os.getenv("BACKFILL_METADATA", "0").strip() == "1")
-FAIL_STOP: int = _safe_int(os.getenv("FAIL_STOP"), 6)
+FAIL_STOP: int = _safe_int(os.getenv("FAIL_STOP"), 15)
 
 # Retry / pacing
 HTTP_MAX_TRIES: int = _safe_int(os.getenv("HTTP_MAX_TRIES") or os.getenv("KIMI_HTTP_MAX_TRIES"), 6)
@@ -587,9 +587,9 @@ def build_prompts(cfg: dict):
     taxonomy = cfg.get("taxonomy", {}) if isinstance(cfg, dict) else {}
     generation = cfg.get("generation", {}) if isinstance(cfg, dict) else {}
 
-    brand = site.get("brand") or site.get("title") or "Reality Checks"
+    brand = site.get("brand") or site.get("title") or "Evergreen Site"
     hubs = [h.get("id") for h in (taxonomy.get("hubs") or []) if isinstance(h, dict) and h.get("id")] or [
-        "work-career", "money-stress", "burnout-load", "milestones", "social-norms"
+        "basics", "how-it-works", "contexts", "misconceptions", "related-concepts"
     ]
     page_types = generation.get("page_types") or [
         "is-it-normal", "checklist", "red-flags", "myth-vs-reality", "explainer"

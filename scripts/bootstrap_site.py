@@ -750,7 +750,7 @@ def main(site_slug: str = "", force_reset: bool = False):
             "default_meta_description": "string (<= 155 chars, neutral)",
             "theme_pack": "one of allowed_theme_packs",
             "hubs": [
-                {"id": "work-career|money-stress|burnout-load|milestones|social-norms", "label": "string"}
+                {"id": "slug-format-id-relevant-to-niche", "label": "Human Readable Label"}
             ],
             "titles_pool": [f"list of {TITLE_COUNT} unique page titles, question-style, evergreen, global-friendly"],
         },
@@ -758,6 +758,7 @@ def main(site_slug: str = "", force_reset: bool = False):
             "Titles must avoid dates/years, prices, stats, brand names, and advice framing.",
             "Prefer novice-friendly, definitional and comparison topics.",
             "Keep titles short and specific; no clickbait.",
+            "Generate 5-7 hubs specific to the niche. Hub IDs must be slug-format (lowercase, hyphens). Do NOT use generic hubs like 'basics' or 'overview'.",
             f"You MUST produce at least {TITLE_COUNT} titles in the titles_pool array.",
         ],
     }
@@ -802,12 +803,14 @@ def main(site_slug: str = "", force_reset: bool = False):
         hubs = (existing.get("taxonomy", {}) or {}).get("hubs") if isinstance(existing, dict) else None
 
     if not hubs or not isinstance(hubs, list) or len(hubs) < 3:
+        # Generate generic hubs from the niche name
+        niche_slug = re.sub(r"[^a-z0-9]+", "-", NICHE.lower()).strip("-") if NICHE else "general"
         hubs = [
-            {"id": "basics", "label": "Basics"},
-            {"id": "how-it-works", "label": "How It Works"},
-            {"id": "gear-setup", "label": "Gear & Setup"},
-            {"id": "troubleshooting", "label": "Troubleshooting"},
-            {"id": "comparisons", "label": "Comparisons"},
+            {"id": f"{niche_slug}-basics", "label": f"{NICHE or 'Topic'} Basics"},
+            {"id": f"{niche_slug}-mechanisms", "label": "How It Works"},
+            {"id": f"{niche_slug}-contexts", "label": "Contexts and Settings"},
+            {"id": f"{niche_slug}-misconceptions", "label": "Misconceptions"},
+            {"id": f"{niche_slug}-related", "label": "Related Concepts"},
         ]
 
     # FIX: Sanitize titles_pool — ensure it's a list of strings, backfill if too few.
