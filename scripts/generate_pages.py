@@ -630,6 +630,7 @@ def build_prompts(cfg: dict):
     system = f"""You write calm, reassuring evergreen content for the site "{brand}".
 NO medical, legal, or financial advice. Avoid diagnosing. Avoid giving instructions like a professional.
 CRITICAL: Never use first-person pronouns (I, we, we're, we've, my, mine, me). Use "people", "a person", "individuals", or "you" instead.
+CRITICAL: Every paragraph must be 2-3 sentences maximum. Never write 4+ sentence paragraphs.
 Forbidden words/phrases: {forbidden_str}.
 Return a single valid JSON object only. No markdown fences. No extra text before or after the JSON.
 """
@@ -674,7 +675,7 @@ FORBIDDEN LANGUAGE (any occurrence = rejected):
 
 TONE & STRUCTURE:
 - Neutral, encyclopedic, beginner-friendly. No hype, no fear.
-- Short paragraphs: 2–3 sentences maximum per paragraph.
+- CRITICAL PARAGRAPH RULE: Every paragraph must be 2–3 sentences maximum. NEVER write a paragraph with 4 or more sentences. If you need more detail, start a new paragraph. This is a hard limit that causes immediate rejection.
 - Use ONLY H2 (##) and H3 (###) headings. No H1, no H4+.
 - FAQs: 4-6 Q&As using ### headings for each question.
 - Wordcount: minimum {wc_min} words, target {wc_ideal_min}–{wc_ideal_max}, maximum {wc_max}.
