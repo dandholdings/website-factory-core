@@ -605,14 +605,21 @@ def build_prompts(cfg: dict):
     forbidden_str = ", ".join(forbidden) if forbidden else "diagnose, diagnosis, prescribed, guaranteed, sue"
 
     outline = generation.get("outline_h2") or [
-        "What this feeling usually means",
-        "Common reasons",
-        "What makes it worse",
-        "What helps (non-advice)",
-        "When it might signal a bigger issue",
+        "Intro",
+        "Definitions and key terms",
+        "Why this topic exists",
+        "How people usually experience this",
+        "How it typically works",
+        "When this topic tends to come up",
+        "Clarifying examples",
+        "Common misconceptions",
+        "Why this topic gets misunderstood online",
+        "Related situations that feel similar",
+        "Related topics and deeper reading",
+        "Neutral summary",
         "FAQs",
     ]
-    outline_md = "\n".join([f"## {h}" for h in outline])
+    outline_md = "\n".join([f"{i+1}. ## {h}" for i, h in enumerate(outline)])
 
     closing_templates = generation.get("closing_reassurance_templates") or []
     closing_hint = ""
@@ -635,8 +642,10 @@ page_type (one of: { " | ".join(page_types) })
 closing_reassurance (one short, gentle line; NOT advice)
 body_md (markdown only; must include the exact H2 headings below)
 
-Use these H2 sections exactly:
+Use these H2 sections IN THIS EXACT ORDER (do NOT reorder, do NOT skip any, do NOT add extras):
 {outline_md}
+
+The "Related topics and deeper reading" section MUST appear BEFORE "Neutral summary" and "FAQs" — not after them. This order is mandatory.
 
 === HARD RULES (violation = rejected page) ===
 
@@ -649,9 +658,9 @@ INTERNAL LINKS (CRITICAL — pages are rejected if this fails):
 - ZERO external links allowed. No https:// URLs anywhere.
 
 FORBIDDEN LANGUAGE (any occurrence = rejected):
-- NO dates or time words: "recent", "recently", "currently", "nowadays", "today", "now", "this year", "in 20XX", "at the time of writing", "as of", "latest", "emerging", "new research", "growing", "increasingly".
+- NO dates or time words. BANNED WORDS: "recent", "recently", "currently", "nowadays", "today", "now", "this year", "last year", "in 20XX", "at the time of writing", "as of", "latest", "emerging", "new research", "growing", "increasingly", "modern", "contemporary". Do not use ANY year numbers (2020, 2024, 2025, etc).
 - NO first-person: "I", "we", "our", "my", "us". Write in third person or second person ("you").
-- NO guarantees: "always", "never", "100%", "will definitely", "guarantee", "proven to", "ensures".
+- NO guarantees: "always", "never", "100%", "will definitely", "guarantee", "proven to", "ensures", "will always", "will never".
 - NO medical/legal terms: "diagnose", "diagnosis", "prescribed", "treatment", "cure", "therapy", "sue", "consult a doctor".
 - NO advice framing: "you should", "try this", "make sure to", "it is recommended", "experts say".
 - NO external links or URLs starting with http.
@@ -812,9 +821,18 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
     body = (data.get("body_md") or "").strip()
     required_h2 = (cfg.get("generation", {}) or {}).get("outline_h2", [])
     if required_h2:
-        missing = [h for h in required_h2 if f"## {h}" not in body]
-        if missing:
-            print(f"  Missing H2 sections: {missing}")
+        # Extract H2 headings in order from body
+        got_h2 = re.findall(r'^## (.+)$', body, re.MULTILINE)
+        got_h2 = [h.strip() for h in got_h2]
+        if got_h2 != required_h2:
+            missing = [h for h in required_h2 if h not in got_h2]
+            extra = [h for h in got_h2 if h not in required_h2]
+            if missing:
+                print(f"  Missing H2 sections: {missing}")
+            if extra:
+                print(f"  Extra H2 sections: {extra}")
+            if not missing and not extra:
+                print(f"  H2 order wrong. Expected: ...{required_h2[-4:]}  Got: ...{got_h2[-4:]}")
             return False, {}
     else:
         if body.count("## ") < 6:
@@ -839,6 +857,20 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
     external_links = re.findall(r'https?://', body)
     if external_links:
         print(f"  External links found ({len(external_links)}) — rejected")
+        return False, {}
+
+    # Pre-write validation: no date/recency language
+    recency_patterns = [r'\b(19|20)\d{2}\b', r'\brecently\b', r'\bcurrently\b', r'\bthis\s+year\b', r'\blast\s+year\b']
+    for pat in recency_patterns:
+        if re.search(pat, body, re.IGNORECASE):
+            match = re.search(pat, body, re.IGNORECASE)
+            print(f"  Date/recency language found: '{match.group()}' — rejected")
+            return False, {}
+
+    # Pre-write validation: no first-person
+    if re.search(r'\b(I|we|our|my|us)\b', body):
+        match = re.search(r'\b(I|we|our|my|us)\b', body)
+        print(f"  First-person language found: '{match.group()}' — rejected")
         return False, {}
 
     return True, data
