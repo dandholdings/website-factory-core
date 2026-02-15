@@ -416,6 +416,8 @@ def validate_page(md_path: Path, cfg: dict) -> Tuple[bool, List[str], int, int]:
 
     # 7) Hard prohibitions in body + frontmatter
     full_text = (yaml.safe_dump(fm, sort_keys=False) + "\n" + body)
+    # Date/recency and stats: check BODY only (frontmatter always has a date field with a year)
+    body_text = body
 
     def score_rule(ok: bool, msg: str):
         nonlocal scored_total, scored_pass
@@ -426,9 +428,9 @@ def validate_page(md_path: Path, cfg: dict) -> Tuple[bool, List[str], int, int]:
             failures.append(msg)
 
     score_rule(not contains_any(full_text, DEFAULT_FORBIDDEN), "Forbidden medical/legal term hit.")
-    score_rule(not contains_any(full_text, DEFAULT_NO_DATES), "Date/recency language is forbidden.")
+    score_rule(not contains_any(body_text, DEFAULT_NO_DATES), "Date/recency language is forbidden.")
     score_rule(not contains_any(full_text, DEFAULT_NO_PRICES), "Price/cost language is forbidden.")
-    score_rule(not contains_any(full_text, DEFAULT_NO_STATS), "Statistics/numbered claims are forbidden.")
+    score_rule(not contains_any(body_text, DEFAULT_NO_STATS), "Statistics/numbered claims are forbidden.")
     score_rule(not contains_any(full_text, DEFAULT_NO_GUARANTEES), "Guarantee/promise language is forbidden.")
     score_rule(not contains_any(full_text, DEFAULT_NO_FIRST_PERSON), "First-person language is forbidden.")
     score_rule(not contains_any(full_text, DEFAULT_NO_CALLS_TO_ACTION), "Calls-to-action / directive phrasing is forbidden.")

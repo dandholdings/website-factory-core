@@ -260,15 +260,47 @@ def slugify(s):
     return s[:80].strip("-")
 
 def load_titles():
+    """Load titles from titles_pool.txt. Supports both plain and hub-pinned formats.
+    Returns list of plain title strings. Use load_titles_with_hubs() for hub info."""
     if not TITLES_POOL_PATH.exists():
         print(f"[warn] titles_pool.txt not found at {TITLES_POOL_PATH}")
         return []
     try:
         with open(TITLES_POOL_PATH, "r", encoding="utf-8") as f:
-            return [t.strip() for t in f if t.strip()]
+            titles = []
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                # Format: "hub_id\tTitle" or plain "Title"
+                if "\t" in line:
+                    _, title = line.split("\t", 1)
+                    titles.append(title.strip())
+                else:
+                    titles.append(line)
+            return titles
     except Exception as e:
         print(f"[warn] Failed to read titles_pool.txt: {e}")
         return []
+
+
+def load_titles_with_hubs():
+    """Load titles with hub assignments. Returns dict {title: hub_id}."""
+    if not TITLES_POOL_PATH.exists():
+        return {}
+    try:
+        mapping = {}
+        with open(TITLES_POOL_PATH, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                if "\t" in line:
+                    hub, title = line.split("\t", 1)
+                    mapping[title.strip()] = hub.strip()
+        return mapping
+    except Exception:
+        return {}
 
 def load_plan(path: str) -> dict:
     if not os.path.isfile(path):
@@ -1261,11 +1293,13 @@ def main():
     todo_items = [it for it in plan_items if isinstance(it, dict) and str(it.get("status", "todo")).lower() == "todo"]
 
     titles = []
+    hub_map = {}  # title -> hub_id from titles_pool.txt
     if todo_items:
         # Hub-batched selection: prioritize hubs that need more pages
         titles = _select_hub_batched_titles(todo_items, CONTENT_ROOT, hub_min=10)
     else:
         titles = load_titles()
+        hub_map = load_titles_with_hubs()
         random.shuffle(titles)
 
     if not titles:
@@ -1310,6 +1344,8 @@ def main():
         if isinstance(plan_item, dict):
             pinned_hub = str(plan_item.get("hub") or "").strip()
             pinned_type = str(plan_item.get("page_type") or "").strip()
+        if not pinned_hub and title in hub_map:
+            pinned_hub = hub_map[title]
 
         ok, data = generate_one_page(
             title=title,

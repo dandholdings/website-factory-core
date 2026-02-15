@@ -687,7 +687,6 @@ def main(site_slug: str = "", force_reset: bool = False):
             "niche": NICHE,
             "tone": TONE or "neutral, calm, beginner-friendly",
             "title_count": TITLE_COUNT,
-        "titles_include_hubs": bool(title_hub_overrides),
         },
         "allowed_theme_packs": THEME_PACKS,
         "required_json": {
@@ -758,7 +757,7 @@ def main(site_slug: str = "", force_reset: bool = False):
         ]
 
     # FIX: Sanitize titles_pool — ensure it's a list of strings, backfill if too few.
-        # --- Titles catalog (with hub assignments) ---
+    # --- Titles catalog (with hub assignments) ---
     # New schema: out["catalog"] is a list of {"title": str, "hub": str}
     catalog = out.get("catalog") or []
     if not isinstance(catalog, list):
@@ -934,7 +933,7 @@ Here is the current taxonomy and catalog:
     if len(titles) > TITLE_COUNT:
         titles = titles[:TITLE_COUNT]
 
-    write_titles_pool(titles)
+    write_titles_pool(Path(TITLES_POOL_PATH), titles, title_hub_overrides)
 
     ensure_manifest_reset()
 
