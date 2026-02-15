@@ -7,8 +7,10 @@
       <div class="lede"><strong>{{ . }}</strong></div>
     {{ end }}
     <div class="page-meta">
+      {{ if not .Date.IsZero }}
       <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "Jan 2, 2006" }}</time>
       <span class="meta-sep">·</span>
+      {{ end }}
       <span>{{ .ReadingTime }} min read</span>
       {{ with .Params.hub }}
         <span class="meta-sep">·</span>
