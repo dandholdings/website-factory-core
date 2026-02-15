@@ -58,11 +58,8 @@ def performance_budget(site_cfg: Dict, pages: List[Path]) -> None:
             md = p.read_text(encoding="utf-8")
         except Exception:
             md = p.read_text(errors="ignore")
-        body = md
-        if body.startswith("---"):
-            parts = body.split("---", 2)
-            if len(parts) == 3:
-                body = parts[2]
+        _, body = read_frontmatter(md)
+        total_words += _word_count(body)
         total_words += _word_count(body)
         if total_words > max_words:
             break
@@ -114,11 +111,16 @@ def load_yaml(path: str) -> dict:
 def read_frontmatter(md_text: str) -> Tuple[Dict, str]:
     if not md_text.startswith("---"):
         return {}, md_text
-    parts = md_text.split("\n---\n", 2)
-    if len(parts) < 3:
+    # Strip the leading "---\n" then split on the closing "\n---\n"
+    after_open = md_text[4:]  # skip "---\n" (or "---\r\n")
+    if after_open.startswith("\n"):
+        after_open = after_open  # handle "---\n\n" edge case
+    parts = after_open.split("\n---", 1)
+    if len(parts) < 2:
         return {}, md_text
-    fm_raw = parts[1]
-    body = parts[2]
+    fm_raw = parts[0]
+    # Body starts after the closing "---" and optional newlines
+    body = parts[1].lstrip("\n").lstrip("\r")
     try:
         fm = yaml.safe_load(fm_raw) or {}
         if not isinstance(fm, dict):
