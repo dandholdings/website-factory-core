@@ -114,11 +114,15 @@ def load_yaml(path: str) -> dict:
 def read_frontmatter(md_text: str) -> Tuple[Dict, str]:
     if not md_text.startswith("---"):
         return {}, md_text
-    parts = md_text.split("\n---\n", 2)
-    if len(parts) < 3:
+    # Strip the opening --- and split on the closing ---
+    rest = md_text[3:].lstrip('\r')  # remove leading ---
+    if rest.startswith('\n'):
+        rest = rest[1:]
+    parts = rest.split("\n---", 1)
+    if len(parts) < 2:
         return {}, md_text
-    fm_raw = parts[1]
-    body = parts[2]
+    fm_raw = parts[0]
+    body = parts[1].lstrip('\n')
     try:
         fm = yaml.safe_load(fm_raw) or {}
         if not isinstance(fm, dict):
@@ -237,9 +241,9 @@ DEFAULT_NO_GUARANTEES = [
 ]
 
 DEFAULT_NO_FIRST_PERSON = [
-    # "us" removed — too aggressive for encyclopedic content ("around us", "between us").
-    # Only match standalone first-person pronouns that indicate author voice.
-    r"(?<![/\w])\b(I|I'm|I've|my|mine|me|we|we're|we've|our|ours)\b(?![/\w])",
+    # "us" and "our" removed — too aggressive for emotional/psychological content.
+    # Only flag strong first-person voice: I, we, my.
+    r"(?<![/\w])\b(I|I'm|I've|my|mine|me|we|we're|we've)\b(?![/\w])",
 ]
 
 DEFAULT_NO_CALLS_TO_ACTION = [

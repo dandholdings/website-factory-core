@@ -905,7 +905,8 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
         r'\bthis\s+year\b',
         r'\blast\s+year\b',
         r'\btoday\b',                   # no place in evergreen content
-        r'\bnow\b',                     # no place in evergreen content
+        r'\bright\s+now\b',             # "now" alone is too aggressive — catches "know now", "by now"
+        r'\bas\s+of\s+now\b',
     ]
     for pat in recency_patterns:
         m = re.search(pat, body, re.MULTILINE)
@@ -914,9 +915,10 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
             return False, {}
 
     # Pre-write validation: no first-person
-    # "us" is too aggressive — catches "around us", "between us" which is fine in encyclopedic writing.
-    # "I" must be case-sensitive standalone (not matching "I" inside words).
-    first_person_m = re.search(r'(?<!\w)(I|we|We|our|Our|my|My)(?!\w)', body)
+    # "us" and "our" are too aggressive — catches "around us", "our emotions" which is common
+    # in encyclopedic writing about emotional/psychological topics.
+    # Only flag strong first-person voice: I, we, my.
+    first_person_m = re.search(r'(?<!\w)(I|we|We|my|My)(?!\w)', body)
     if first_person_m:
         print(f"  First-person language found: '{first_person_m.group()}' — rejected")
         return False, {}
