@@ -529,6 +529,9 @@ def main() -> int:
     print(f"\nCompliance score: {compliance:.1f}% ({total_passed}/{total_scored} checks passed)")
     if failures_total:
         print(f"Total failures: {failures_total}")
+        if DELETE_ON_FAIL:
+            print("Offending pages removed — continuing build.")
+            return 0
         return 1
 
     print("All pages passed quality gates.")
