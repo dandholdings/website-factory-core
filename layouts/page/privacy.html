@@ -1,31 +1,63 @@
 {{ define "main" }}
 {{ $brand := .Site.Title }}
+{{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $brand = . }}{{ end }}{{ end }}{{ end }}
 {{ $email := "" }}
-{{ with site.Data.site }}{{ with .site }}
-  {{ with .brand }}{{ $brand = . }}{{ end }}
-  {{ with .contact_email }}{{ $email = . }}{{ end }}
-{{ end }}{{ end }}
+{{ with site.Data.site }}{{ with .site }}{{ with .contact_email }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
 {{ if not $email }}{{ with .Site.Params.factory }}{{ with .contactEmail }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
 
 <article class="page">
   <header class="page-header">
+    {{ partial "breadcrumbs.html" . }}
     <h1 class="page-title">{{ .Title }}</h1>
     {{ with .Params.summary }}<div class="lede"><strong>{{ . }}</strong></div>{{ end }}
   </header>
 
   <div class="page-body content">
-    <p><strong>{{ $brand }}</strong> is a static website. We don’t run accounts, logins, or user profiles.</p>
-    <h2>Analytics</h2>
-    <p>We may use privacy-respecting analytics to understand which pages are useful and to improve navigation. This data is aggregated and not intended to identify you.</p>
+    <h2>Overview</h2>
+    <p>This privacy policy explains how <strong>{{ $brand }}</strong> collects, uses, and handles information when you visit this website. This site is intended for a global audience. By using this site, you acknowledge that you have read and understood this policy.</p>
+
+    <h2>Information collected automatically</h2>
+    <p>When you visit this site, certain information may be collected automatically by our hosting provider, analytics tools, or advertising partners. This may include your IP address, browser type and version, operating system, referring URL, pages visited, time and date of your visit, and general geographic location derived from your IP address.</p>
+    <p>This information is collected for the purposes of maintaining site security, understanding how the site is used, and improving the quality of content and navigation.</p>
+
+    <h2>Information you provide voluntarily</h2>
+    <p>If you contact us via email, we will receive your email address and any information you choose to include in your message. This information is used solely to respond to your enquiry and is not shared with third parties.</p>
+
+    <h2>Cookies and similar technologies</h2>
+    <p>This site may use cookies and similar technologies. Cookies are small text files stored on your device that help websites function and provide usage information. Cookies on this site may be set by us or by third-party services such as analytics providers and advertising networks.</p>
+    <p>You can control cookie behaviour through your browser settings. Disabling cookies may affect the functionality of certain features on this site.</p>
 
     <h2>Advertising</h2>
-    <p>We may show ads through third-party providers (for example, Google). These providers may use cookies or similar technologies to deliver and measure ads.</p>
+    <p>This site may display advertisements provided by third-party advertising networks, including Google AdSense. These networks may use cookies, web beacons, and similar technologies to serve advertisements based on your prior visits to this site or other websites. Google's use of advertising cookies enables it and its partners to serve ads based on your visit to this site and other sites on the internet.</p>
+    <p>You may opt out of personalised advertising by visiting <a href="https://www.google.com/settings/ads" rel="nofollow noopener">Google Ads Settings</a> or <a href="https://optout.aboutads.info/" rel="nofollow noopener">aboutads.info</a>.</p>
 
-    <h2>Contact</h2>
+    <h2>Analytics</h2>
+    <p>This site may use analytics services to understand how visitors interact with the site. These services may collect information about pages visited, time spent on pages, and general navigation patterns. This data is used in aggregate to improve site content and structure.</p>
+
+    <h2>Information for users in the European Economic Area</h2>
+    <p>If you are located in the European Economic Area (EEA), the United Kingdom, or Switzerland, certain data protection laws may apply to the processing of your personal data. Where applicable, we process personal data on the basis of legitimate interests (such as site security and analytics) or consent (such as for personalised advertising). You may have the right to access, correct, or request deletion of your personal data, or to object to certain processing. To exercise these rights, please contact us using the details below.</p>
+
+    <h2>Information for California residents</h2>
+    <p>If you are a California resident, the California Consumer Privacy Act (CCPA) and California Privacy Rights Act (CPRA) may provide you with additional rights regarding your personal information. This site does not sell personal information. You may have the right to request information about the categories of personal information collected and to request deletion of your information. To make such a request, please contact us using the details below.</p>
+
+    <h2>Data sharing</h2>
+    <p>We do not sell, trade, or rent your personal information to third parties. Information may be shared with service providers who assist in operating this site (such as hosting and analytics providers), but only to the extent necessary for those services to function. These providers are expected to handle data in accordance with their own privacy policies.</p>
+
+    <h2>International data transfers</h2>
+    <p>This site is operated from Australia and may use services hosted in various countries. By using this site, you acknowledge that your information may be transferred to and processed in countries other than your own, which may have different data protection standards.</p>
+
+    <h2>Children</h2>
+    <p>This site is not directed at children under the age of 13. We do not knowingly collect personal information from children under 13. If you believe that a child under 13 has provided personal information through this site, please contact us so that we can take appropriate action.</p>
+
+    <h2>Data security</h2>
+    <p>We take reasonable measures to protect the information collected through this site. However, no method of transmission over the internet or method of electronic storage is completely secure, and we cannot guarantee absolute security.</p>
+
+    <h2>Changes to this policy</h2>
+    <p>This privacy policy may be updated from time to time to reflect changes in our practices or for other operational, legal, or regulatory reasons. We encourage you to review this page periodically. Continued use of the site after changes are posted constitutes acceptance of the updated policy.</p>
+
     {{ if $email }}
-      <p>If you have questions about this policy, email <a href="mailto:{{ $email }}">{{ $email }}</a>.</p>
-    {{ else }}
-      <p class="muted">If you have questions about this policy, use our Contact page.</p>
+    <h2>Contact</h2>
+    <p>If you have questions or concerns about this privacy policy or your personal data, please contact us at <a href="mailto:{{ $email }}">{{ $email }}</a>.</p>
     {{ end }}
 
     {{ .Content }}

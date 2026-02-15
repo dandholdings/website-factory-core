@@ -1,24 +1,52 @@
 {{ define "main" }}
 {{ $brand := .Site.Title }}
 {{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $brand = . }}{{ end }}{{ end }}{{ end }}
+{{ $email := "" }}
+{{ with site.Data.site }}{{ with .site }}{{ with .contact_email }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
+{{ if not $email }}{{ with .Site.Params.factory }}{{ with .contactEmail }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
 
 <article class="page">
   <header class="page-header">
+    {{ partial "breadcrumbs.html" . }}
     <h1 class="page-title">{{ .Title }}</h1>
     {{ with .Params.summary }}<div class="lede"><strong>{{ . }}</strong></div>{{ end }}
   </header>
 
   <div class="page-body content">
-    <p>By using <strong>{{ $brand }}</strong>, you agree to these terms.</p>
-
-    <h2>No professional advice</h2>
-    <p>The content is general information only and is not medical, legal, or financial advice.</p>
+    <h2>Acceptance of terms</h2>
+    <p>By accessing and using <strong>{{ $brand }}</strong>, you agree to be bound by these terms of use. If you do not agree with any part of these terms, please do not use this site. These terms apply to all visitors and users of the site, regardless of location.</p>
 
     <h2>Use at your own risk</h2>
-    <p>We aim for accuracy, but we can’t guarantee completeness or suitability for your situation.</p>
+    <p>All content on this site is provided for general informational and educational purposes only. You use this site and rely on its content entirely at your own risk and discretion. The site does not provide medical, psychological, legal, financial, or any other form of professional advice.</p>
 
-    <h2>Advertising and affiliate links</h2>
-    <p>Some pages may contain ads or affiliate links. This helps keep the site free.</p>
+    <h2>Limitation of liability</h2>
+    <p>To the fullest extent permitted by applicable law, {{ $brand }}, its operators, contributors, and affiliates shall not be liable for any direct, indirect, incidental, consequential, or special damages arising out of or in connection with the use of or inability to use this site or its content. This includes, without limitation, damages for loss of profits, data, goodwill, or other intangible losses.</p>
+    <p>This limitation applies regardless of the legal theory under which liability is asserted, including negligence, contract, strict liability, or any other basis, even if we have been advised of the possibility of such damages.</p>
+
+    <h2>Intellectual property</h2>
+    <p>All content on this site, including text, graphics, layout, and design, is the property of {{ $brand }} or its content providers and is protected by applicable intellectual property laws. You may not reproduce, distribute, modify, or create derivative works from any content on this site without prior written permission, except for personal, non-commercial use such as reading and sharing individual pages.</p>
+
+    <h2>Acceptable use</h2>
+    <p>You agree not to use this site in any way that is unlawful, harmful, or that could damage, disable, overburden, or impair the site or interfere with any other party's use of the site. You agree not to attempt to gain unauthorised access to any part of the site, its servers, or any systems connected to the site.</p>
+    <p>You may not use automated tools to scrape, download, or reproduce the content of this site in bulk without prior written permission.</p>
+
+    <h2>External links</h2>
+    <p>This site may contain links to third-party websites or resources. These links are provided for convenience and informational purposes only. {{ $brand }} does not endorse, control, or accept responsibility for the content, privacy policies, or practices of any linked third-party websites. You access external sites at your own risk.</p>
+
+    <h2>Modifications to these terms</h2>
+    <p>{{ $brand }} reserves the right to modify these terms at any time without prior notice. Changes will be effective immediately upon posting to this page. Your continued use of the site after any changes constitutes acceptance of the revised terms. We encourage you to review this page periodically.</p>
+
+    <h2>Governing law</h2>
+    <p>These terms of use are governed by and construed in accordance with the laws of Australia. Any disputes arising from or in connection with these terms or the use of this site shall be subject to the exclusive jurisdiction of the courts of Australia.</p>
+    <p>By using this site from outside Australia, you acknowledge that you do so voluntarily and are responsible for compliance with any applicable local laws.</p>
+
+    <h2>Severability</h2>
+    <p>If any provision of these terms is found to be invalid or unenforceable by a court of competent jurisdiction, the remaining provisions shall continue in full force and effect.</p>
+
+    {{ if $email }}
+    <h2>Contact</h2>
+    <p>If you have questions about these terms, please contact us at <a href="mailto:{{ $email }}">{{ $email }}</a>.</p>
+    {{ end }}
 
     {{ .Content }}
   </div>

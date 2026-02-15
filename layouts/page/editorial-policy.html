@@ -7,30 +7,37 @@
 
 <article class="page">
   <header class="page-header">
+    {{ partial "breadcrumbs.html" . }}
     <h1 class="page-title">{{ .Title }}</h1>
     {{ with .Params.summary }}<div class="lede"><strong>{{ . }}</strong></div>{{ end }}
   </header>
 
   <div class="page-body content">
-    <h2>Content standards</h2>
-    <p><strong>{{ $brand }}</strong> follows a clear set of editorial standards for every page published on this site.</p>
-    <p>All content is designed to be evergreen, neutral, and informational. Pages avoid time-sensitive claims, price references, specific statistics, and any language that could be read as professional advice.</p>
+    <h2>Commitment to neutrality</h2>
+    <p>{{ $brand }} is committed to presenting information in a neutral, balanced, and factual manner. Guides do not advocate for particular viewpoints, endorse products or services, or attempt to persuade readers toward specific conclusions. The goal is to explain topics clearly and let readers form their own understanding.</p>
 
-    <h2>How content is produced</h2>
-    <p>Content is structured around established conceptual frameworks relevant to each topic area. Drafting involves automated research and writing tools to ensure consistent structure, coverage, and tone across all guides.</p>
-    <p>Each page follows a standardised format that includes definitions, explanations, examples, common misconceptions, and frequently asked questions.</p>
+    <h2>No advice or recommendations</h2>
+    <p>Content on this site does not constitute medical, psychological, legal, financial, or professional advice of any kind. Guides do not recommend treatments, diagnose conditions, suggest legal strategies, or provide financial recommendations. Readers who require professional guidance should consult a qualified practitioner.</p>
 
-    <h2>Editorial review</h2>
-    <p>Every page is reviewed for clarity, factual consistency, and adherence to our content standards before publication. Pages that do not meet quality thresholds are revised or removed.</p>
+    <h2>Content production process</h2>
+    <p>Each guide is developed using a structured editorial framework. This process includes identifying a specific question or concept, researching relevant information, drafting content according to a consistent outline, and reviewing the result for clarity, accuracy, and neutrality.</p>
+    <p>Content is drafted using structured research tools and automated editorial assistants. These tools help ensure consistency across guides and adherence to the site's editorial standards. All content is reviewed before publication.</p>
 
-    <h2>What we avoid</h2>
-    <p>{{ $brand }} does not publish content that contains medical, legal, or financial advice; diagnostic language; guarantees or promises; first-person opinion; clickbait or sensationalised framing; or time-sensitive claims that would require ongoing updates.</p>
+    <h2>Editorial standards</h2>
+    <p>All guides on {{ $brand }} adhere to the following standards:</p>
+    <p>Guides use neutral, third-person language and avoid first-person voice. They do not include date-specific references, statistical claims without context, or absolute guarantees. They avoid sensationalist phrasing, exaggerated claims, and emotionally manipulative language.</p>
+    <p>Each guide follows a consistent structure that includes an introduction, key definitions, practical context, clarifying examples, common misconceptions, and a frequently asked questions section. This structure ensures that readers can find relevant information quickly and compare explanations across topics.</p>
 
-    <h2>Corrections and feedback</h2>
+    <h2>Corrections and updates</h2>
+    <p>If an error or inaccuracy is identified in any guide, the editorial team will review and update the content. Readers are encouraged to report potential issues via the <a href="{{ "/contact/" | relURL }}">contact page</a>.</p>
+    <p>Guides may be updated periodically to improve clarity or to reflect changes in the general understanding of a topic. The site does not publish retractions or corrections notices for minor editorial improvements.</p>
+
+    <h2>Avoiding sensationalism</h2>
+    <p>{{ $brand }} does not publish content designed to generate alarm, controversy, or emotional reactions. Guides are written in a calm, measured tone appropriate for informational reference material. Topics are presented with appropriate nuance and context.</p>
+
     {{ if $email }}
-    <p>If you find an error or have a suggestion for improvement, please contact us at <a href="mailto:{{ $email }}">{{ $email }}</a>. Include the page URL so we can review it quickly.</p>
-    {{ else }}
-    <p>If you find an error or have a suggestion, please use our <a href="{{ "/contact/" | relURL }}">contact page</a>.</p>
+    <h2>Contact</h2>
+    <p>Questions about this editorial policy can be directed to <a href="mailto:{{ $email }}">{{ $email }}</a>.</p>
     {{ end }}
 
     {{ .Content }}

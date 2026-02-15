@@ -1,8 +1,10 @@
 {{ define "main" }}
 {{ $brand := .Site.Title }}
 {{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $brand = . }}{{ end }}{{ end }}{{ end }}
-{{ $tagline := "Calm, practical reassurance — not advice." }}
+{{ $tagline := "Structured, evergreen explanations — not advice." }}
 {{ with site.Data.site }}{{ with .site }}{{ with .tagline }}{{ $tagline = . }}{{ end }}{{ end }}{{ end }}
+{{ $niche := "" }}
+{{ with site.Data.site }}{{ with .site }}{{ with .niche }}{{ $niche = . }}{{ end }}{{ end }}{{ end }}
 
 <section class="home-hero">
   <h1 class="home-title">{{ $brand }}</h1>
@@ -16,36 +18,47 @@
   {{ partial "ad-slot.html" (dict "ctx" . "slot" "home_top") }}
 </section>
 
-{{/* Topic hubs */}}
+{{/* Authority paragraphs */}}
+<section class="home-section about-block">
+  <h2 class="section-title">What this site covers</h2>
+  <p>{{ $brand }} is an informational resource dedicated to {{ if $niche }}{{ lower $niche }}{{ else }}its subject area{{ end }}. Each guide explores a specific question, concept, or situation with clear definitions, structured examples, and neutral context. The content is designed to be accessible to general audiences without assuming prior expertise.</p>
+  <p>Guides are organised into topic hubs that group related questions together. This structure allows readers to build understanding progressively, moving between connected ideas at their own pace. The site covers foundational concepts, common experiences, practical distinctions, and frequently misunderstood aspects of {{ if $niche }}{{ lower $niche }}{{ else }}its topics{{ end }}.</p>
+  <p>All content on this site is informational and educational in nature. It does not constitute medical, psychological, legal, financial, or any other form of professional advice. If you require professional guidance, please consult a qualified practitioner in your area.</p>
+</section>
+
+{{/* How to use this site */}}
+<section class="home-section">
+  <h2 class="section-title">How to use this site</h2>
+  <p>Start by browsing the topic hubs below, which group guides by theme. Each hub contains multiple guides that address specific questions or concepts. You can also use the search bar to find guides on a particular subject, or browse the <a href="{{ "/pages/" | relURL }}">complete list of guides</a>.</p>
+  <p>Every guide follows a consistent structure: an introduction, key definitions, practical context, clarifying examples, common misconceptions, and a brief FAQ section. This makes it easy to find the information you need and to compare explanations across related topics.</p>
+  <p>For a visual overview of how all topics on this site connect, visit the <a href="{{ "/concept-map/" | relURL }}">concept map</a>.</p>
+</section>
+
+{{/* Topic hubs — only show hubs with published pages */}}
 {{ $hubs := slice }}
 {{ with site.Data.site }}{{ with .taxonomy }}{{ with .hubs }}{{ $hubs = . }}{{ end }}{{ end }}{{ end }}
 {{ if gt (len $hubs) 0 }}
   <section class="home-section">
-    <h2 class="section-title">Start with a topic</h2>
+    <h2 class="section-title">Explore by topic</h2>
     <div class="cards">
-      {{ $shown := 0 }}
       {{ range $hubs }}
-        {{ if lt $shown 12 }}
-          {{ $count := (len (where site.RegularPages "Params.hub" .id)) }}
-          {{ if gt $count 0 }}
-            <a class="card" href="{{ (printf "/hubs/%s/" .id) | relURL }}">
-              <div class="card-title">{{ .label }}</div>
-              <div class="card-summary">{{ $count }} guides</div>
-            </a>
-            {{ $shown = add $shown 1 }}
-          {{ end }}
+        {{ $count := (len (where site.RegularPages "Params.hub" .id)) }}
+        {{ if gt $count 0 }}
+          <a class="card" href="{{ (printf "/hubs/%s/" .id) | relURL }}">
+            <div class="card-title">{{ .label }}</div>
+            <div class="card-summary">{{ $count }} {{ if eq $count 1 }}guide{{ else }}guides{{ end }}</div>
+          </a>
         {{ end }}
       {{ end }}
     </div>
   </section>
 {{ end }}
 
-
-{{/* Featured / most recent evergreen pages */}}
+{{/* Recent guides */}}
 {{ $pages := where site.RegularPages "Section" "pages" | first 8 }}
 {{ if gt (len $pages) 0 }}
   <section class="home-section">
-    <h2 class="section-title">Popular guides</h2>
+    <h2 class="section-title">Recent guides</h2>
     <div class="cards">
       {{ range $pages }}
         <a class="card" href="{{ .RelPermalink }}">
@@ -56,16 +69,6 @@
     </div>
   </section>
 {{ end }}
-
-{{/* About This Site — E-E-A-T clarity block */}}
-{{ $niche := "" }}
-{{ with site.Data.site }}{{ with .site }}{{ with .default_meta_description }}{{ $niche = . }}{{ end }}{{ end }}{{ end }}
-<section class="home-section about-block">
-  <h2 class="section-title">About this site</h2>
-  <p>{{ $brand }} provides structured, evergreen explanations designed to be clear, neutral, and easy to understand. Content is organised into topic hubs so you can explore at your own pace.</p>
-  <p>This site does not provide medical, legal, or financial advice. It is designed for general informational purposes only.</p>
-  <p><a href="{{ "/about/" | relURL }}">Learn more about our approach</a> · <a href="{{ "/editorial-policy/" | relURL }}">Editorial policy</a></p>
-</section>
 
 <section class="home-section">
   {{ .Content }}
