@@ -904,8 +904,8 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
         r'\bcurrently\b',
         r'\bthis\s+year\b',
         r'\blast\s+year\b',
-        r'\btoday\b',                   # no place in evergreen content
-        r'\bright\s+now\b',             # "now" alone is too aggressive — catches "know now", "by now"
+        r'(?<!\bto)\btoday\b',         # avoid "up to today" but catch standalone
+        r'\bright\s+now\b',
         r'\bas\s+of\s+now\b',
     ]
     for pat in recency_patterns:
@@ -917,8 +917,10 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
     # Pre-write validation: no first-person
     # "us" and "our" are too aggressive — catches "around us", "our emotions" which is common
     # in encyclopedic writing about emotional/psychological topics.
-    # Only flag strong first-person voice: I, we, my.
-    first_person_m = re.search(r'(?<!\w)(I|we|We|my|My)(?!\w)', body)
+    # Only flag strong first-person voice: I, we, my, me, mine.
+    # Check body + summary + description to match quality_gates coverage.
+    text_to_check_fp = body + "\n" + str(data.get("summary", "")) + "\n" + str(data.get("description", ""))
+    first_person_m = re.search(r"(?<![/\w])\b(I|I'm|I've|my|mine|me|we|we're|we've)\b(?![/\w])", text_to_check_fp)
     if first_person_m:
         print(f"  First-person language found: '{first_person_m.group()}' — rejected")
         return False, {}
