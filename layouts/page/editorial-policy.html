@@ -1,0 +1,41 @@
+{{ define "main" }}
+{{ $brand := .Site.Title }}
+{{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $brand = . }}{{ end }}{{ end }}{{ end }}
+{{ $email := "" }}
+{{ with site.Data.site }}{{ with .site }}{{ with .contact_email }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
+{{ if not $email }}{{ with .Site.Params.factory }}{{ with .contactEmail }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
+
+<article class="page">
+  <header class="page-header">
+    <h1 class="page-title">{{ .Title }}</h1>
+    {{ with .Params.summary }}<div class="lede"><strong>{{ . }}</strong></div>{{ end }}
+  </header>
+
+  <div class="page-body content">
+    <h2>Content standards</h2>
+    <p><strong>{{ $brand }}</strong> follows a clear set of editorial standards for every page published on this site.</p>
+    <p>All content is designed to be evergreen, neutral, and informational. Pages avoid time-sensitive claims, price references, specific statistics, and any language that could be read as professional advice.</p>
+
+    <h2>How content is produced</h2>
+    <p>Content is structured around established conceptual frameworks relevant to each topic area. Drafting involves automated research and writing tools to ensure consistent structure, coverage, and tone across all guides.</p>
+    <p>Each page follows a standardised format that includes definitions, explanations, examples, common misconceptions, and frequently asked questions.</p>
+
+    <h2>Editorial review</h2>
+    <p>Every page is reviewed for clarity, factual consistency, and adherence to our content standards before publication. Pages that do not meet quality thresholds are revised or removed.</p>
+
+    <h2>What we avoid</h2>
+    <p>{{ $brand }} does not publish content that contains medical, legal, or financial advice; diagnostic language; guarantees or promises; first-person opinion; clickbait or sensationalised framing; or time-sensitive claims that would require ongoing updates.</p>
+
+    <h2>Corrections and feedback</h2>
+    {{ if $email }}
+    <p>If you find an error or have a suggestion for improvement, please contact us at <a href="mailto:{{ $email }}">{{ $email }}</a>. Include the page URL so we can review it quickly.</p>
+    {{ else }}
+    <p>If you find an error or have a suggestion, please use our <a href="{{ "/contact/" | relURL }}">contact page</a>.</p>
+    {{ end }}
+
+    {{ .Content }}
+  </div>
+</article>
+{{ end }}
+
+{{ define "sidebar" }}{{ partial "sidebar.html" . }}{{ end }}

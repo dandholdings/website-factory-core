@@ -13,51 +13,146 @@
   })();
 </script>
 
-<title>{{ if .IsHome }}{{ .Site.Title }}{{ else }}{{ .Title }} · {{ .Site.Title }}{{ end }}</title>
-
-{{ $desc := "" }}
-{{ with .Params.description }}{{ $desc = . }}{{ end }}
-{{ if not $desc }}{{ with .Params.summary }}{{ $desc = . }}{{ end }}{{ end }}
-{{ if not $desc }}{{ with site.Data.site }}{{ with .site }}{{ with .default_meta_description }}{{ $desc = . }}{{ end }}{{ end }}{{ end }}{{ end }}
-{{ if not $desc }}{{ with .Site.Params.factory.brand }}{{ $desc = printf "%s: calm, practical reassurance — not advice." . }}{{ end }}{{ end }}
-{{ if not $desc }}{{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $desc = printf "%s: calm, practical reassurance — not advice." . }}{{ end }}{{ end }}{{ end }}{{ end }}
-{{ if not $desc }}{{ $desc = "Calm, practical reassurance — not advice." }}{{ end }}
-
-<meta name="description" content="{{ $desc }}">
-<meta name="robots" content="index,follow">
-
-<meta property="og:title" content="{{ if .IsHome }}{{ .Site.Title }}{{ else }}{{ .Title }}{{ end }}">
-<meta property="og:description" content="{{ $desc }}">
-<meta property="og:type" content="{{ if .IsHome }}website{{ else }}article{{ end }}">
-{{ with .Permalink }}<meta property="og:url" content="{{ . }}">{{ end }}
-
-{{/* Basic JSON-LD for better eligibility + understanding */}}
+{{/* --- Brand / site identity variables --- */}}
 {{ $brand := .Site.Title }}
 {{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $brand = . }}{{ end }}{{ end }}{{ end }}
 {{ $base := .Site.BaseURL }}
 {{ with site.Data.site }}{{ with .site }}{{ with .base_url }}{{ $base = . }}{{ end }}{{ end }}{{ end }}
+{{ $contactEmail := "" }}
+{{ with site.Data.site }}{{ with .site }}{{ with .contact_email }}{{ $contactEmail = . }}{{ end }}{{ end }}{{ end }}
+{{ if not $contactEmail }}{{ with .Site.Params.factory }}{{ with .contactEmail }}{{ $contactEmail = . }}{{ end }}{{ end }}{{ end }}
 
+{{/* --- Title tag: "Primary Query – Short Clarifier | Site Name" --- */}}
 {{ if .IsHome }}
-<script type="application/ld+json">
-{{- dict
-  "@context" "https://schema.org"
-  "@type" "WebSite"
-  "name" $brand
-  "url" $base
-| jsonify -}}
-</script>
+  <title>{{ $brand }} – {{ with site.Data.site }}{{ with .site }}{{ with .tagline }}{{ . }}{{ end }}{{ end }}{{ end }}</title>
 {{ else }}
+  <title>{{ .Title }} | {{ $brand }}</title>
+{{ end }}
+
+{{/* --- Meta description --- */}}
+{{ $desc := "" }}
+{{ with .Params.description }}{{ $desc = . }}{{ end }}
+{{ if not $desc }}{{ with .Params.summary }}{{ $desc = . }}{{ end }}{{ end }}
+{{ if not $desc }}{{ with site.Data.site }}{{ with .site }}{{ with .default_meta_description }}{{ $desc = . }}{{ end }}{{ end }}{{ end }}{{ end }}
+{{ if not $desc }}{{ $desc = printf "%s: calm, practical explanations — not advice." $brand }}{{ end }}
+
+<meta name="description" content="{{ $desc }}">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="{{ .Permalink }}">
+
+<meta property="og:title" content="{{ if .IsHome }}{{ $brand }}{{ else }}{{ .Title }}{{ end }}">
+<meta property="og:description" content="{{ $desc }}">
+<meta property="og:type" content="{{ if .IsHome }}website{{ else }}article{{ end }}">
+{{ with .Permalink }}<meta property="og:url" content="{{ . }}">{{ end }}
+
+{{/* --- JSON-LD Structured Data --- */}}
+{{ if .IsHome }}
+{{/* Homepage: WebSite + Organization */}}
 <script type="application/ld+json">
-{{- dict
-  "@context" "https://schema.org"
-  "@type" "Article"
-  "headline" .Title
-  "description" $desc
-  "mainEntityOfPage" (dict "@type" "WebPage" "@id" .Permalink)
-  "publisher" (dict "@type" "Organization" "name" $brand)
-  "author" (dict "@type" "Organization" "name" $brand)
-| jsonify -}}
+[
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": {{ $brand | jsonify }},
+    "url": {{ $base | jsonify }}
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": {{ $brand | jsonify }},
+    "url": {{ $base | jsonify }}{{ if $contactEmail }},
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "email": {{ $contactEmail | jsonify }},
+      "contactType": "editorial"
+    }{{ end }}
+  }
+]
 </script>
+
+{{ else }}
+{{/* Article pages: Article + BreadcrumbList */}}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": {{ .Title | jsonify }},
+  "description": {{ $desc | jsonify }},
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": {{ .Permalink | jsonify }}
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": {{ $brand | jsonify }}
+  },
+  "author": {
+    "@type": "Organization",
+    "name": {{ (printf "%s Editorial Team" $brand) | jsonify }}
+  }{{ with .Date }},
+  "datePublished": {{ .Format "2006-01-02" | jsonify }}{{ end }}{{ with .Lastmod }},
+  "dateModified": {{ .Format "2006-01-02" | jsonify }}{{ end }}
+}
+</script>
+
+{{/* BreadcrumbList */}}
+{{ $hub := .Params.hub }}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": {{ $base | jsonify }}
+    }{{ if $hub }},
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": {{ ($hub | humanize) | jsonify }},
+      "item": {{ (printf "%shubs/%s/" $base $hub) | jsonify }}
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": {{ .Title | jsonify }}
+    }{{ else }},
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": {{ .Title | jsonify }}
+    }{{ end }}
+  ]
+}
+</script>
+
+{{/* FAQPage schema — only if page has FAQ section */}}
+{{ $content := .RawContent }}
+{{ if findRE `(?i)## *(FAQ|Frequently Asked)` $content }}
+  {{ $faqs := findRE `### +(.+?)\n+([\s\S]+?)(?=\n### |\n## |\z)` $content }}
+  {{ if ge (len $faqs) 2 }}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {{ range $i, $faq := $faqs }}{{ if $i }},{{ end }}
+    {
+      "@type": "Question",
+      "name": {{ (index (findRE `### +(.+)` $faq 1) 0 | replaceRE `### +` "" | plainify) | jsonify }},
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": {{ (replaceRE `### +.+\n+` "" $faq | plainify | truncate 500) | jsonify }}
+      }
+    }{{ end }}
+  ]
+}
+</script>
+  {{ end }}
+{{ end }}
+
 {{ end }}
 
 {{/* Ads: load provider script once (slots render elsewhere). */}}
@@ -79,7 +174,6 @@
 
 {{ if and (eq $adsProvider "adsense") $adsClient }}
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ $adsClient }}" crossorigin="anonymous"></script>
-  {{/* Auto mode: AdSense will place ads; we still provide manual slots for hybrid. */}}
   {{ if eq $adsMode "auto" }}
     <meta name="google-adsense-account" content="{{ $adsClient }}">
   {{ end }}

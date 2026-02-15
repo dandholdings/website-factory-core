@@ -1,6 +1,9 @@
 {{ define "main" }}
 {{ $brand := .Site.Title }}
 {{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $brand = . }}{{ end }}{{ end }}{{ end }}
+{{ $email := "" }}
+{{ with site.Data.site }}{{ with .site }}{{ with .contact_email }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
+{{ if not $email }}{{ with .Site.Params.factory }}{{ with .contactEmail }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
 
 <article class="page">
   <header class="page-header">
@@ -9,8 +12,27 @@
   </header>
 
   <div class="page-body content">
-    <p><strong>{{ $brand }}</strong> publishes evergreen guides designed to be calm, practical, and easy to scan.</p>
-    <p class="muted">Nothing on this site is medical, legal, or financial advice. It’s general information to help you think clearly and decide your next step.</p>
+    <h2>What this site covers</h2>
+    <p><strong>{{ $brand }}</strong> publishes structured, evergreen guides designed to be calm, practical, and easy to scan. Each guide is organised around a single question or concept, with clear definitions, examples, and neutral context.</p>
+
+    <h2>Who this site is for</h2>
+    <p>Anyone looking for clear, beginner-friendly explanations. The guides are written for general audiences and avoid jargon where possible.</p>
+
+    <h2>What this site does not do</h2>
+    <p>This site does not provide medical, legal, or financial advice. It does not diagnose, prescribe, or recommend specific treatments or actions. If you need professional guidance, please consult a qualified professional in your area.</p>
+
+    <h2>Our editorial approach</h2>
+    <p>Content is developed using structured research frameworks and automated drafting tools, then reviewed for clarity, neutrality, and consistency with our editorial standards. Each page follows a consistent structure to make information easy to find and compare across topics.</p>
+    <p>Read our full <a href="{{ "/editorial-policy/" | relURL }}">editorial policy</a> for more detail on how content is produced and maintained.</p>
+
+    <h2>The {{ $brand }} editorial team</h2>
+    <p>Content is produced and maintained by the {{ $brand }} editorial team. Our focus is on accuracy, clarity, and consistency rather than opinion or commentary.</p>
+
+    {{ if $email }}
+    <h2>Get in touch</h2>
+    <p>If you spot an error, have feedback, or want to suggest a topic, contact us at <a href="mailto:{{ $email }}">{{ $email }}</a>.</p>
+    {{ end }}
+
     {{ .Content }}
   </div>
 

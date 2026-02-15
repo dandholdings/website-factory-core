@@ -57,6 +57,16 @@
   </section>
 {{ end }}
 
+{{/* About This Site — E-E-A-T clarity block */}}
+{{ $niche := "" }}
+{{ with site.Data.site }}{{ with .site }}{{ with .default_meta_description }}{{ $niche = . }}{{ end }}{{ end }}{{ end }}
+<section class="home-section about-block">
+  <h2 class="section-title">About this site</h2>
+  <p>{{ $brand }} provides structured, evergreen explanations designed to be clear, neutral, and easy to understand. Content is organised into topic hubs so you can explore at your own pace.</p>
+  <p>This site does not provide medical, legal, or financial advice. It is designed for general informational purposes only.</p>
+  <p><a href="{{ "/about/" | relURL }}">Learn more about our approach</a> · <a href="{{ "/editorial-policy/" | relURL }}">Editorial policy</a></p>
+</section>
+
 <section class="home-section">
   {{ .Content }}
 </section>
