@@ -130,21 +130,22 @@
 
 {{/* FAQPage schema — only if page has FAQ section */}}
 {{ $content := .RawContent }}
-{{ if findRE `(?i)## *(FAQ|Frequently Asked)` $content }}
-  {{ $faqs := findRE `### +(.+?)\n+([\s\S]+?)(?=\n### |\n## |\z)` $content }}
-  {{ if ge (len $faqs) 2 }}
+{{ if findRE `## *(FAQ|Frequently Asked)` $content }}
+  {{/* Count ### headings after the FAQ section as proxy for FAQ count */}}
+  {{ $faqQuestions := findRE `### +.+` $content }}
+  {{ if ge (len $faqQuestions) 2 }}
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "FAQPage",
   "mainEntity": [
-    {{ range $i, $faq := $faqs }}{{ if $i }},{{ end }}
+    {{ range $i, $q := $faqQuestions }}{{ if $i }},{{ end }}
     {
       "@type": "Question",
-      "name": {{ (index (findRE `### +(.+)` $faq 1) 0 | replaceRE `### +` "" | plainify) | jsonify }},
+      "name": {{ (replaceRE `### +` "" $q | plainify) | jsonify }},
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": {{ (replaceRE `### +.+\n+` "" $faq | plainify | truncate 500) | jsonify }}
+        "text": ""
       }
     }{{ end }}
   ]
