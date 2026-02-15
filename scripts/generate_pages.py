@@ -103,7 +103,7 @@ def _safe_int(val, default: int) -> int:
 GEN_VERSION: str = os.getenv("GEN_VERSION", "1")
 FACTORY_MODE: str = (os.getenv("FACTORY_MODE", "generate") or "generate").strip().lower()
 BACKFILL_METADATA: bool = (os.getenv("BACKFILL_METADATA", "0").strip() == "1")
-FAIL_STOP: int = _safe_int(os.getenv("FAIL_STOP"), 15)
+FAIL_STOP: int = _safe_int(os.getenv("FAIL_STOP"), 6)
 
 # Retry / pacing
 HTTP_MAX_TRIES: int = _safe_int(os.getenv("HTTP_MAX_TRIES") or os.getenv("KIMI_HTTP_MAX_TRIES"), 6)
@@ -562,34 +562,14 @@ def build_internal_link_hints(content_root="content/pages", limit: int = 40) -> 
     return "\n".join([f"- [{t}](/pages/{s}/)" for t, s in items if t and s])
 
 
-def _generate_sibling_link_hints(titles_pool_path: Path, limit: int = 20) -> str:
-    """Generate internal link hints from the titles pool for fresh bootstraps."""
-    if not titles_pool_path.exists():
-        return ""
-    try:
-        titles = [t.strip() for t in titles_pool_path.read_text(encoding="utf-8").splitlines() if t.strip()]
-    except Exception:
-        return ""
-    if not titles:
-        return ""
-    # Pick a random sample and convert to slug format
-    sample = random.sample(titles, min(limit, len(titles)))
-    items = []
-    for t in sample:
-        s = slugify(t)
-        if s:
-            items.append(f"- [{t}](/pages/{s}/)")
-    return "\n".join(items)
-
-
 def build_prompts(cfg: dict):
     site = cfg.get("site", {}) if isinstance(cfg, dict) else {}
     taxonomy = cfg.get("taxonomy", {}) if isinstance(cfg, dict) else {}
     generation = cfg.get("generation", {}) if isinstance(cfg, dict) else {}
 
-    brand = site.get("brand") or site.get("title") or "Evergreen Site"
+    brand = site.get("brand") or site.get("title") or "Reality Checks"
     hubs = [h.get("id") for h in (taxonomy.get("hubs") or []) if isinstance(h, dict) and h.get("id")] or [
-        "basics", "how-it-works", "contexts", "misconceptions", "related-concepts"
+        "work-career", "money-stress", "burnout-load", "milestones", "social-norms"
     ]
     page_types = generation.get("page_types") or [
         "is-it-normal", "checklist", "red-flags", "myth-vs-reality", "explainer"
@@ -605,21 +585,14 @@ def build_prompts(cfg: dict):
     forbidden_str = ", ".join(forbidden) if forbidden else "diagnose, diagnosis, prescribed, guaranteed, sue"
 
     outline = generation.get("outline_h2") or [
-        "Intro",
-        "Definitions and key terms",
-        "Why this topic exists",
-        "How people usually experience this",
-        "How it typically works",
-        "When this topic tends to come up",
-        "Clarifying examples",
-        "Common misconceptions",
-        "Why this topic gets misunderstood online",
-        "Related situations that feel similar",
-        "Related topics and deeper reading",
-        "Neutral summary",
+        "What this feeling usually means",
+        "Common reasons",
+        "What makes it worse",
+        "What helps (non-advice)",
+        "When it might signal a bigger issue",
         "FAQs",
     ]
-    outline_md = "\n".join([f"{i+1}. ## {h}" for i, h in enumerate(outline)])
+    outline_md = "\n".join([f"## {h}" for h in outline])
 
     closing_templates = generation.get("closing_reassurance_templates") or []
     closing_hint = ""
@@ -629,8 +602,6 @@ def build_prompts(cfg: dict):
     # FIX: Stronger JSON-only instruction for Gemini Flash 2.5
     system = f"""You write calm, reassuring evergreen content for the site "{brand}".
 NO medical, legal, or financial advice. Avoid diagnosing. Avoid giving instructions like a professional.
-CRITICAL: Never use first-person pronouns (I, we, we're, we've, my, mine, me). Use "people", "a person", "individuals", or "you" instead.
-CRITICAL: Every paragraph must be 2-3 sentences maximum. Never write 4+ sentence paragraphs.
 Forbidden words/phrases: {forbidden_str}.
 Return a single valid JSON object only. No markdown fences. No extra text before or after the JSON.
 """
@@ -644,41 +615,26 @@ page_type (one of: { " | ".join(page_types) })
 closing_reassurance (one short, gentle line; NOT advice)
 body_md (markdown only; must include the exact H2 headings below)
 
-Use these H2 sections IN THIS EXACT ORDER (do NOT reorder, do NOT skip any, do NOT add extras, do NOT duplicate any):
+Use these H2 sections exactly:
 {outline_md}
 
-CRITICAL: Use each H2 heading EXACTLY ONCE. Do NOT repeat any heading. The article must have exactly {len(outline)} H2 sections, no more, no less.
-
-=== HARD RULES (violation = rejected page) ===
-
-INTERNAL LINKS (CRITICAL — pages are rejected if this fails):
-- You MUST include at least 3 internal links in body_md.
-- Use ONLY relative URLs in this format: [anchor text](/pages/slug-here/)
-- Anchor text must be descriptive (NEVER "click here", "learn more", "read more").
-- Place links naturally within paragraph text, not bunched together.
-- The "Related topics and deeper reading" section (from the outline above) should include 3+ internal links as a bulleted list. Do NOT create a separate "Related topics" section — use the one already in the outline.
-- ZERO external links allowed. No https:// URLs anywhere.
-
-FORBIDDEN LANGUAGE (any occurrence = rejected):
-- NO dates or time words. BANNED WORDS: "recent", "recently", "currently", "nowadays", "today", "now", "this year", "last year", "in 20XX", "at the time of writing", "as of", "latest", "emerging", "new research", "growing", "increasingly", "modern", "contemporary". Do not use ANY year numbers (2020, 2024, 2025, etc).
-- NO first-person pronouns anywhere in the text. This is a STRICT rule. BANNED WORDS: "I", "I'm", "I've", "we", "we're", "we've", "my", "mine", "me". Write in third person or second person ("you") instead.
-  WRONG: "We all experience emotional contagion." → RIGHT: "People experience emotional contagion."
-  WRONG: "When we feel sadness, it spreads." → RIGHT: "When a person feels sadness, it spreads."
-  WRONG: "Our emotions influence others." → RIGHT: "A person's emotions influence others."
-  WRONG: "It connects us as humans." → RIGHT: "It connects people as humans."
-  Note: "us" is acceptable ONLY in fixed phrases like "around us" or "between us" where it cannot be rewritten.
-- NO guarantees: "guarantee", "100%", "will definitely", "will always", "will never". Avoid absolute claims.
-- NO medical/legal terms: "diagnose", "diagnosis", "prescribed", "treatment", "cure", "therapy", "sue", "consult a doctor".
-- NO advice framing: "you should", "try this", "make sure to", "it is recommended", "experts say".
-- NO external links or URLs starting with http.
-- NO affiliate/commercial language: "best", "worst", "buy", "sign up", "download", "review", "sponsored".
-
-TONE & STRUCTURE:
-- Neutral, encyclopedic, beginner-friendly. No hype, no fear.
-- CRITICAL PARAGRAPH RULE: Every paragraph must be 2–3 sentences maximum. NEVER write a paragraph with 4 or more sentences. If you need more detail, start a new paragraph. This is a hard limit that causes immediate rejection.
+Rules:
+- Neutral, encyclopedic tone (beginner-friendly). No hype, no fear framing.
+- No medical, legal, or financial advice.
+- No dates or time-sensitive language (no years, "recent", "currently", "this year", "today", "now").
+- No prices, costs, or financial claims.
+- No guarantees/promises ("always", "never", "100%", "will definitely", "guarantee").
+- No first-person language ("I", "we", "our", "my").
+- No calls-to-action or directive language ("you should", "try this", "make sure to", "sign up", "buy", "download").
+- No affiliate/product review language (affiliate, sponsored, review, coupon, discount).
+- Comparisons must be neutral (avoid superlatives like "best", "worst", "better than").
+- Short paragraphs: 2–3 sentences max.
 - Use ONLY H2 (##) and H3 (###) headings. No H1, no H4+.
-- FAQs: 4-6 Q&As using ### headings for each question.
+- Include at least 3 contextually relevant internal links using ONLY relative URLs like /pages/<slug>/ (no external links).
 - Wordcount: minimum {wc_min} words, target {wc_ideal_min}–{wc_ideal_max}, maximum {wc_max}.
+- Keep tone grounded and human, not clinical.
+- No "diagnose/diagnosis/prescribed/guaranteed/sue".
+- FAQs: 4-6 Q&As using ### headings for each question.
 - Do not include the closing reassurance inside body_md; put it in closing_reassurance.
 {closing_hint}
 """
@@ -704,13 +660,11 @@ def compute_contract_hash(site_config_path: str) -> str:
 def read_markdown_frontmatter(md_text: str):
     if not md_text.startswith("---"):
         return {}, md_text
-    # Strip the leading "---\n" then split on the closing "\n---\n"
-    after_open = md_text[4:]  # skip "---\n"
-    parts = after_open.split("\n---\n", 1)
-    if len(parts) < 2:
+    parts = md_text.split("\n---\n", 2)
+    if len(parts) < 3:
         return {}, md_text
-    fm_raw = parts[0]
-    body = parts[1]
+    fm_raw = parts[1]
+    body = parts[2]
     try:
         fm = yaml.safe_load(fm_raw) or {}
         if not isinstance(fm, dict):
@@ -828,56 +782,9 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
     body = (data.get("body_md") or "").strip()
     required_h2 = (cfg.get("generation", {}) or {}).get("outline_h2", [])
     if required_h2:
-        # Auto-fix common H2 variations before checking
-        h2_aliases = {
-            "Related topics": "Related topics and deeper reading",
-            "Related Topics": "Related topics and deeper reading",
-            "Related topics and further reading": "Related topics and deeper reading",
-            "Deeper reading": "Related topics and deeper reading",
-            "Further reading": "Related topics and deeper reading",
-            "Summary": "Neutral summary",
-            "Frequently asked questions": "FAQs",
-            "FAQ": "FAQs",
-            "Misconceptions": "Common misconceptions",
-            "Key terms": "Definitions and key terms",
-            "Definitions": "Definitions and key terms",
-            "Examples": "Clarifying examples",
-            "Introduction": "Intro",
-        }
-        for alias, canonical in h2_aliases.items():
-            body = re.sub(rf'^## {re.escape(alias)}\s*$', f'## {canonical}', body, flags=re.MULTILINE)
-
-        # Auto-dedup: if a heading appears twice, remove the second occurrence and its content
-        seen_h2 = set()
-        deduped_lines = []
-        skip_until_next_h2 = False
-        for line in body.split('\n'):
-            h2_match = re.match(r'^## (.+)$', line)
-            if h2_match:
-                heading = h2_match.group(1).strip()
-                if heading in seen_h2:
-                    # Duplicate — skip this heading and its content until next H2
-                    skip_until_next_h2 = True
-                    continue
-                seen_h2.add(heading)
-                skip_until_next_h2 = False
-            elif skip_until_next_h2:
-                continue
-            deduped_lines.append(line)
-        body = '\n'.join(deduped_lines)
-
-        # Extract H2 headings in order from body
-        got_h2 = re.findall(r'^## (.+)$', body, re.MULTILINE)
-        got_h2 = [h.strip() for h in got_h2]
-        if got_h2 != required_h2:
-            missing = [h for h in required_h2 if h not in got_h2]
-            extra = [h for h in got_h2 if h not in required_h2]
-            if missing:
-                print(f"  Missing H2 sections: {missing}")
-            if extra:
-                print(f"  Extra H2 sections: {extra}")
-            if not missing and not extra:
-                print(f"  H2 order wrong. Expected: ...{required_h2[-4:]}  Got: ...{got_h2[-4:]}")
+        missing = [h for h in required_h2 if f"## {h}" not in body]
+        if missing:
+            print(f"  Missing H2 sections: {missing}")
             return False, {}
     else:
         if body.count("## ") < 6:
@@ -891,78 +798,9 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
         return False, {}
 
     data["body_md"] = body
-
-    # Pre-write validation: internal links
-    internal_link_count = len(re.findall(r'\[.*?\]\(/pages/[a-z0-9-]+/\)', body))
-    if internal_link_count < 3:
-        print(f"  Too few internal links: {internal_link_count} (need 3+)")
-        return False, {}
-
-    # Pre-write validation: no external links
-    external_links = re.findall(r'https?://', body)
-    if external_links:
-        print(f"  External links found ({len(external_links)}) — rejected")
-        return False, {}
-
-    # Pre-write validation: no date/recency language (must match quality_gates.py exactly)
-    recency_patterns = [
-        r'\b(19|20)\d{2}\b',           # years
-        r'\brecently\b',
-        r'\bcurrently\b',
-        r'\bthis\s+year\b',
-        r'\blast\s+year\b',
-        r'(?<!\bto)\btoday\b',         # avoid "up to today" but catch standalone
-        r'\bright\s+now\b',
-        r'\bas\s+of\s+now\b',
-    ]
-    for pat in recency_patterns:
-        m = re.search(pat, body, re.MULTILINE)
-        if m:
-            print(f"  Date/recency language found: '{m.group().strip()[:40]}' — rejected")
-            return False, {}
-
-    # Pre-write validation: no first-person
-    # "us" and "our" are too aggressive — catches "around us", "our emotions" which is common
-    # in encyclopedic writing about emotional/psychological topics.
-    # Only flag strong first-person voice: I, we, my, me, mine.
-    # Check body + summary + description + closing_reassurance to match quality_gates coverage.
-    text_to_check_fp = body + "\n" + str(data.get("summary", "")) + "\n" + str(data.get("description", "")) + "\n" + str(data.get("closing_reassurance", ""))
-    first_person_m = re.search(r"(?<![/\w])\b(I|I'm|I've|my|mine|me|we|we're|we've)\b(?![/\w])", text_to_check_fp)
-    if first_person_m:
-        print(f"  First-person language found: '{first_person_m.group()}' — rejected")
-        return False, {}
-
-    # Pre-write validation: no guarantee/promise language
-    guarantee_patterns = [
-        r'\bguarantee[ds]?\b',
-        r'\b100%\b',
-        r'\bwill\s+definitely\b',
-        r'\bwill\s+always\b',
-        r'\bwill\s+never\b',
-    ]
-    for pat in guarantee_patterns:
-        m = re.search(pat, body, re.IGNORECASE)
-        if m:
-            print(f"  Guarantee language found: '{m.group()}' — rejected")
-            return False, {}
-
-    # Pre-write validation: paragraph length (max 3 sentences per paragraph)
-    max_sent = 3
-    bad_paras = 0
-    for para in re.split(r'\n{2,}', body.strip()):
-        para = para.strip()
-        if not para or para.startswith('#') or para.startswith('-') or para.startswith('*') or re.match(r'^\d+\.', para) or para.startswith('```'):
-            continue
-        sc = len(re.findall(r'[.!?](?:\s|$)', para))
-        if sc > max_sent:
-            bad_paras += 1
-    if bad_paras > 0:
-        print(f"  {bad_paras} paragraphs exceed {max_sent} sentences — rejected")
-        return False, {}
-
     return True, data
 
-def write_page(slug: str, data: dict, close: str, contract_hash: str, prompt_hash: str, tags: list = None) -> Path:
+def write_page(slug: str, data: dict, close: str, contract_hash: str, prompt_hash: str) -> Path:
     """Create a content page folder and write index.md."""
     page_slug = (slug or "").strip()
     if not page_slug:
@@ -990,9 +828,6 @@ def write_page(slug: str, data: dict, close: str, contract_hash: str, prompt_has
         "contract_hash": contract_hash,
         "prompt_hash": prompt_hash,
     }
-    # Add tags for Hugo related-content matching
-    if tags:
-        front["tags"] = tags
 
     body = (data.get("body_md") or "").rstrip()
     close_txt = (close or "").strip()
@@ -1051,128 +886,6 @@ def mark_done(title: str) -> None:
         pass
 
 
-def _count_pages_per_hub(content_root: Path) -> dict:
-    """Count existing published pages per hub."""
-    counts = {}
-    for md in content_root.glob("*/index.md"):
-        try:
-            raw = md.read_text(encoding="utf-8")
-            fm, _ = read_markdown_frontmatter(raw)
-            hub = str(fm.get("hub", "")).strip()
-            if hub:
-                counts[hub] = counts.get(hub, 0) + 1
-        except Exception:
-            continue
-    return counts
-
-
-def _select_hub_batched_titles(todo_items: list, content_root: Path, hub_min: int = 10) -> list:
-    """Select titles prioritizing hubs that need more pages.
-
-    Strategy: fill each hub to hub_min pages before moving to the next.
-    This ensures every hub has enough siblings for internal linking.
-    """
-    hub_counts = _count_pages_per_hub(content_root)
-
-    # Group todo items by hub
-    by_hub = {}
-    for it in todo_items:
-        hub = str(it.get("hub", "")).strip() or "general"
-        by_hub.setdefault(hub, []).append(it)
-
-    # Prioritize hubs under the minimum, then hubs with the fewest pages
-    ordered_titles = []
-    hub_priority = sorted(by_hub.keys(), key=lambda h: hub_counts.get(h, 0))
-
-    for hub in hub_priority:
-        items = by_hub[hub]
-        ordered_titles.extend([it.get("title", "").strip() for it in items if it.get("title")])
-
-    return ordered_titles
-
-
-def link_injection_pass(content_root: Path, limit: int = 50):
-    """Second pass: ensure every page has at least 3 internal links.
-
-    Reads all existing pages, finds those with fewer than 3 internal links,
-    and injects links into their 'Related topics and deeper reading' section.
-    """
-    # Build catalog of all existing pages
-    all_pages = {}  # slug -> {title, hub, tags, path}
-    for md in content_root.glob("*/index.md"):
-        try:
-            raw = md.read_text(encoding="utf-8")
-            fm, body = read_markdown_frontmatter(raw)
-            slug = fm.get("slug") or md.parent.name
-            all_pages[slug] = {
-                "title": fm.get("title", slug.replace("-", " ").title()),
-                "hub": fm.get("hub", ""),
-                "tags": set(fm.get("tags", [])),
-                "path": md,
-                "body": body,
-                "fm": fm,
-            }
-        except Exception:
-            continue
-
-    if len(all_pages) < 4:
-        # Not enough pages to do meaningful linking
-        return 0
-
-    fixed = 0
-    for slug, info in list(all_pages.items())[:limit]:
-        body = info["body"]
-        existing_links = re.findall(r'\[.*?\]\(/pages/([a-z0-9-]+)/\)', body)
-        if len(existing_links) >= 3:
-            continue
-
-        # Find best link targets: same hub first, then by tag overlap
-        candidates = []
-        for other_slug, other in all_pages.items():
-            if other_slug == slug or other_slug in existing_links:
-                continue
-            score = 0
-            if other["hub"] == info["hub"]:
-                score += 10
-            score += len(info["tags"] & other["tags"])
-            candidates.append((score, other_slug, other["title"]))
-
-        candidates.sort(key=lambda x: -x[0])
-        needed = 3 - len(existing_links)
-        picks = candidates[:needed]
-
-        if not picks:
-            continue
-
-        # Build link block
-        links_md = "\n".join([f"- [{title}](/pages/{s}/)" for _, s, title in picks])
-
-        # Inject into "Related topics and deeper reading" section if it exists
-        related_heading = "## Related topics and deeper reading"
-        if related_heading in body:
-            # Append links after the heading
-            parts = body.split(related_heading, 1)
-            # Find the next ## heading after related section
-            after = parts[1]
-            next_h2 = re.search(r'\n## ', after)
-            if next_h2:
-                insert_pos = next_h2.start()
-                new_after = after[:insert_pos].rstrip() + "\n\n" + links_md + "\n" + after[insert_pos:]
-            else:
-                new_after = after.rstrip() + "\n\n" + links_md + "\n"
-            body = parts[0] + related_heading + new_after
-        else:
-            # Append at the very end
-            body = body.rstrip() + f"\n\n{related_heading}\n\n{links_md}\n"
-
-        # Write back
-        md_text = write_markdown_with_frontmatter(info["fm"], body)
-        info["path"].write_text(md_text, encoding="utf-8")
-        fixed += 1
-
-    return fixed
-
-
 def main():
     site_cfg_path = resolve_site_config_path()
     cfg = load_yaml(site_cfg_path)
@@ -1190,12 +903,7 @@ def main():
     # Provide internal link candidates so the model can reliably include them
     link_hints = build_internal_link_hints(CONTENT_ROOT, limit=40)
     if link_hints:
-        page_prompt = page_prompt + f"\n\n=== AVAILABLE INTERNAL LINKS (use at least 3 from this list) ===\n{link_hints}\n\nYou MUST use links from this list. Do NOT invent slugs. Do NOT use external URLs.\n"
-    else:
-        # Fresh bootstrap: no pages exist yet. Generate plausible sibling slugs from the titles pool.
-        sibling_slugs = _generate_sibling_link_hints(TITLES_POOL_PATH, limit=20)
-        if sibling_slugs:
-            page_prompt = page_prompt + f"\n\n=== AVAILABLE INTERNAL LINKS (use at least 3 from this list) ===\n{sibling_slugs}\n\nYou MUST use links from this list. Do NOT invent slugs. Do NOT use external URLs.\n"
+        page_prompt = page_prompt + "\n\nInternal links you MAY use (choose at least 3; do not invent links; no external links):\n" + link_hints + "\n"
 
     os.makedirs(CONTENT_ROOT, exist_ok=True)
     contract_hash = compute_contract_hash(site_cfg_path)
@@ -1262,8 +970,7 @@ def main():
 
     titles = []
     if todo_items:
-        # Hub-batched selection: prioritize hubs that need more pages
-        titles = _select_hub_batched_titles(todo_items, CONTENT_ROOT, hub_min=10)
+        titles = [it.get("title", "").strip() for it in todo_items if it.get("title")]
     else:
         titles = load_titles()
         random.shuffle(titles)
@@ -1311,6 +1018,9 @@ def main():
             pinned_hub = str(plan_item.get("hub") or "").strip()
             pinned_type = str(plan_item.get("page_type") or "").strip()
 
+        if not pinned_hub:
+            pinned_hub = TITLE_HUB_OVERRIDES.get(title, "")
+
         ok, data = generate_one_page(
             title=title,
             system=system,
@@ -1330,8 +1040,7 @@ def main():
             continue
 
         close = choose_close(data, cfg)
-        plan_tags = plan_item.get("tags", []) if isinstance(plan_item, dict) else []
-        write_page(slug=slug, data=data, close=close, contract_hash=contract_hash, prompt_hash=prompt_hash, tags=plan_tags)
+        write_page(slug=slug, data=data, close=close, contract_hash=contract_hash, prompt_hash=prompt_hash)
 
         if isinstance(plan_item, dict):
             plan_item["slug"] = slug
@@ -1351,12 +1060,6 @@ def main():
     if todo_items:
         save_plan(str(PLAN_PATH), plan)
 
-    # Two-pass linking: fix internal links on all pages after generation batch
-    if produced > 0:
-        fixed = link_injection_pass(CONTENT_ROOT)
-        if fixed:
-            print(f"\n[link-pass] Injected internal links into {fixed} pages")
-
     duration = int(time.time() - START_TIME)
     print("\n===== FACTORY SUMMARY =====")
     print(f"Pages attempted: {attempts}")
@@ -1368,3 +1071,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# Optional per-title hub overrides from titles_pool.txt lines in the form: "<hub_id>\t<Title>"
+TITLE_HUB_OVERRIDES: dict[str, str] = {}

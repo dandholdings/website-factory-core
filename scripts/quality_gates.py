@@ -114,15 +114,11 @@ def load_yaml(path: str) -> dict:
 def read_frontmatter(md_text: str) -> Tuple[Dict, str]:
     if not md_text.startswith("---"):
         return {}, md_text
-    # Strip the opening --- and split on the closing ---
-    rest = md_text[3:].lstrip('\r')  # remove leading ---
-    if rest.startswith('\n'):
-        rest = rest[1:]
-    parts = rest.split("\n---", 1)
-    if len(parts) < 2:
+    parts = md_text.split("\n---\n", 2)
+    if len(parts) < 3:
         return {}, md_text
-    fm_raw = parts[0]
-    body = parts[1].lstrip('\n')
+    fm_raw = parts[1]
+    body = parts[2]
     try:
         fm = yaml.safe_load(fm_raw) or {}
         if not isinstance(fm, dict):
@@ -203,11 +199,11 @@ DEFAULT_NO_DATES = [
     r"\bcurrently\b",
     r"\bthis\s+year\b",
     r"\blast\s+year\b",
+    # FIX: "today" and "now" are too aggressive — they appear in phrases like
+    # "the world today" or "know now that". Use stricter patterns.
     r"(?<!\bto)\btoday\b",  # avoid "up to today" false positives but catch standalone
-    # "now" alone is too aggressive — catches "know now", "by now", "even now".
-    # Only flag time-specific phrases.
-    r"\bright\s+now\b",
-    r"\bas\s+of\s+now\b",
+    # "now" only at sentence boundaries (standalone usage)
+    r"(?:^|[.!?]\s+)[A-Z][^.]*\bnow\b",
 ]
 
 DEFAULT_NO_PRICES = [
@@ -236,14 +232,18 @@ DEFAULT_NO_GUARANTEES = [
     r"\bguarantee(d|s)?\b",
     r"\b100%\b",
     r"\bwill\s+definitely\b",
+    # FIX: "always" and "never" are extremely common in everyday language.
+    # These create massive false positive rates with Flash 2.5.
+    # Only flag definitive promise patterns.
     r"\bwill\s+always\b",
     r"\bwill\s+never\b",
+    r"\bis\s+always\s+(?:the|a)\b",
 ]
 
 DEFAULT_NO_FIRST_PERSON = [
-    # "us" and "our" removed — too aggressive for emotional/psychological content.
-    # Only flag strong first-person voice: I, we, my.
-    r"(?<![/\w])\b(I|I'm|I've|my|mine|me|we|we're|we've)\b(?![/\w])",
+    # FIX: Tighter pattern — the old one matched "I" inside words and URLs.
+    # Only match standalone first-person pronouns.
+    r"(?<![/\w])\b(I|I'm|I've|my|mine|me|we|we're|we've|our|ours|us)\b(?![/\w])",
 ]
 
 DEFAULT_NO_CALLS_TO_ACTION = [
@@ -416,8 +416,6 @@ def validate_page(md_path: Path, cfg: dict) -> Tuple[bool, List[str], int, int]:
 
     # 7) Hard prohibitions in body + frontmatter
     full_text = (yaml.safe_dump(fm, sort_keys=False) + "\n" + body)
-    # Date/recency: check BODY only (frontmatter always has a date field with a year)
-    body_text = body
 
     def score_rule(ok: bool, msg: str):
         nonlocal scored_total, scored_pass
@@ -428,9 +426,9 @@ def validate_page(md_path: Path, cfg: dict) -> Tuple[bool, List[str], int, int]:
             failures.append(msg)
 
     score_rule(not contains_any(full_text, DEFAULT_FORBIDDEN), "Forbidden medical/legal term hit.")
-    score_rule(not contains_any(body_text, DEFAULT_NO_DATES), "Date/recency language is forbidden.")
+    score_rule(not contains_any(full_text, DEFAULT_NO_DATES), "Date/recency language is forbidden.")
     score_rule(not contains_any(full_text, DEFAULT_NO_PRICES), "Price/cost language is forbidden.")
-    score_rule(not contains_any(body_text, DEFAULT_NO_STATS), "Statistics/numbered claims are forbidden.")
+    score_rule(not contains_any(full_text, DEFAULT_NO_STATS), "Statistics/numbered claims are forbidden.")
     score_rule(not contains_any(full_text, DEFAULT_NO_GUARANTEES), "Guarantee/promise language is forbidden.")
     score_rule(not contains_any(full_text, DEFAULT_NO_FIRST_PERSON), "First-person language is forbidden.")
     score_rule(not contains_any(full_text, DEFAULT_NO_CALLS_TO_ACTION), "Calls-to-action / directive phrasing is forbidden.")
@@ -504,10 +502,7 @@ def main() -> int:
     print(f"\nCompliance score: {compliance:.1f}% ({total_passed}/{total_scored} checks passed)")
     if failures_total:
         print(f"Total failures: {failures_total}")
-        print(f"Bad pages removed — continuing with {total_passed} clean pages.")
-        # Exit 0: bad pages have been deleted, good pages should still be committed.
-        # Exiting 1 would abort the workflow and waste all good pages.
-        return 0
+        return 1
 
     print("All pages passed quality gates.")
     return 0

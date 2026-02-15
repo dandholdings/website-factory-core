@@ -1,0 +1,20 @@
+{{/* Breadcrumbs: Home > Hub > Page */}}
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="{{ "/" | relURL }}">Home</a></li>
+
+    {{ $hub := .Params.hub }}
+    {{ if and $hub (ne $hub "") }}
+      {{ $hubPage := site.GetPage (printf "/hubs/%s" $hub) }}
+      {{ if $hubPage }}
+        <li><a href="{{ $hubPage.RelPermalink }}">{{ $hubPage.Title }}</a></li>
+      {{ else }}
+        <li><a href="{{ (printf "/hubs/%s/" $hub) | relURL }}">{{ $hub | humanize }}</a></li>
+      {{ end }}
+    {{ end }}
+
+    {{ if and (not .IsHome) (ne .Kind "section") (ne .Kind "taxonomy") (ne .Kind "term") }}
+      <li aria-current="page"><span>{{ .Title }}</span></li>
+    {{ end }}
+  </ol>
+</nav>

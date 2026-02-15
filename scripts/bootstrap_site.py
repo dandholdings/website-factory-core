@@ -515,93 +515,39 @@ def ensure_manifest_reset():
     MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
     MANIFEST_PATH.write_text(json.dumps({"used_titles": [], "generated_this_run": []}, indent=2), encoding="utf-8")
 
-def write_titles_pool(titles: list):
-    TITLES_POOL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    uniq = []
-    seen = set()
-    for t in titles:
-        t = (t or "").strip()
-        if not t:
-            continue
-        key = re.sub(r"\s+", " ", t.lower()).strip()
-        if key in seen:
-            continue
-        seen.add(key)
-        uniq.append(t)
-    TITLES_POOL_PATH.write_text("\n".join(uniq) + "\n", encoding="utf-8")
 
-def build_catalog(titles: list, hubs: list, niche: str) -> dict:
-    """Build a structured plan.yaml catalog from flat titles + hubs.
-
-    Assigns each title to a hub based on keyword matching, generates
-    3-6 tags per title from significant words, then orders by hub
-    so generation happens in hub batches (critical for internal linking).
+def write_titles_pool(path: Path, titles: list[str], title_hub_overrides: dict[str, str] | None = None) -> None:
     """
-    hub_ids = [h["id"] for h in hubs if isinstance(h, dict) and h.get("id")]
-    hub_labels = {h["id"]: h.get("label", h["id"]) for h in hubs if isinstance(h, dict)}
+    Writes titles_pool.txt.
+    Back-compat: plain lines are titles.
+    New: if title_hub_overrides provides a hub_id for a title, write "<hub_id>\t<Title>".
+    """
+    title_hub_overrides = title_hub_overrides or {}
 
-    if not hub_ids:
-        hub_ids = ["general"]
-        hub_labels = {"general": "General"}
+    path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Build keyword map: hub_id -> set of keywords from the label + id
-    hub_keywords = {}
-    for hid in hub_ids:
-        words = set()
-        words.update(hid.lower().replace("-", " ").split())
-        label = hub_labels.get(hid, "")
-        words.update(label.lower().replace("-", " ").split())
-        # Remove very common words that don't help matching
-        words -= {"and", "the", "of", "a", "an", "in", "to", "for", "is", "it", "on", "or"}
-        hub_keywords[hid] = words
+    lines: list[str] = []
+    seen_titles: set[str] = set()
 
-    # Stopwords for tag extraction
-    STOP = {"a", "an", "the", "of", "in", "to", "for", "is", "it", "on", "or",
-            "and", "be", "are", "was", "were", "can", "do", "does", "how", "what",
-            "why", "when", "where", "which", "who", "that", "this", "with", "from",
-            "by", "at", "as", "but", "not", "no", "if", "so", "than", "more",
-            "about", "into", "one", "you", "your", "its", "has", "have", "had",
-            "been", "being", "will", "would", "could", "should", "may", "might"}
-
-    items = []
-    for title in titles:
-        t = (title or "").strip()
-        if not t:
+    for t in titles:
+        if not isinstance(t, str):
             continue
-        slug = re.sub(r"[^a-z0-9]+", "-", t.lower().strip())
-        slug = re.sub(r"-+", "-", slug).strip("-")[:80]
+        title = t.strip()
+        if not title:
+            continue
 
-        # Score each hub by keyword overlap with the title
-        title_words = set(t.lower().replace("-", " ").replace("?", "").split())
-        best_hub = hub_ids[0]
-        best_score = -1
-        for hid in hub_ids:
-            score = len(title_words & hub_keywords[hid])
-            if score > best_score:
-                best_score = score
-                best_hub = hid
+        key = title.lower()
+        if key in seen_titles:
+            continue
+        seen_titles.add(key)
 
-        # Generate tags: significant words from title (3-6 tags)
-        tag_words = [w for w in t.lower().replace("?", "").replace("-", " ").split()
-                     if w not in STOP and len(w) > 2]
-        # Also add the hub as a tag for related-content matching
-        tags = list(dict.fromkeys([best_hub] + tag_words[:5]))  # dedupe, hub first
+        hub = (title_hub_overrides.get(title) or "").strip()
+        if hub:
+            lines.append(f"{hub}\t{title}")
+        else:
+            lines.append(title)
 
-        items.append({
-            "title": t,
-            "slug": slug,
-            "hub": best_hub,
-            "tags": tags,
-            "status": "todo",
-        })
-
-    # Sort by hub so generation happens in hub batches
-    hub_order = {hid: i for i, hid in enumerate(hub_ids)}
-    items.sort(key=lambda x: (hub_order.get(x.get("hub", ""), 999), x.get("title", "")))
-
-    return {"items": items}
-
-
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 def patch_hugo_yaml(site_cfg: dict):
     """Keep hugo.yaml minimal but aligned to site identity for Cloudflare Pages."""
     if not HUGO_PATH.exists():
@@ -741,6 +687,7 @@ def main(site_slug: str = "", force_reset: bool = False):
             "niche": NICHE,
             "tone": TONE or "neutral, calm, beginner-friendly",
             "title_count": TITLE_COUNT,
+        "titles_include_hubs": bool(title_hub_overrides),
         },
         "allowed_theme_packs": THEME_PACKS,
         "required_json": {
@@ -750,7 +697,7 @@ def main(site_slug: str = "", force_reset: bool = False):
             "default_meta_description": "string (<= 155 chars, neutral)",
             "theme_pack": "one of allowed_theme_packs",
             "hubs": [
-                {"id": "slug-format-id-relevant-to-niche", "label": "Human Readable Label"}
+                {"id": "work-career|money-stress|burnout-load|milestones|social-norms", "label": "string"}
             ],
             "titles_pool": [f"list of {TITLE_COUNT} unique page titles, question-style, evergreen, global-friendly"],
         },
@@ -758,7 +705,6 @@ def main(site_slug: str = "", force_reset: bool = False):
             "Titles must avoid dates/years, prices, stats, brand names, and advice framing.",
             "Prefer novice-friendly, definitional and comparison topics.",
             "Keep titles short and specific; no clickbait.",
-            "Generate 5-7 hubs specific to the niche. Hub IDs must be slug-format (lowercase, hyphens). Do NOT use generic hubs like 'basics' or 'overview'.",
             f"You MUST produce at least {TITLE_COUNT} titles in the titles_pool array.",
         ],
     }
@@ -803,38 +749,125 @@ def main(site_slug: str = "", force_reset: bool = False):
         hubs = (existing.get("taxonomy", {}) or {}).get("hubs") if isinstance(existing, dict) else None
 
     if not hubs or not isinstance(hubs, list) or len(hubs) < 3:
-        # Generate generic hubs from the niche name
-        niche_slug = re.sub(r"[^a-z0-9]+", "-", NICHE.lower()).strip("-") if NICHE else "general"
         hubs = [
-            {"id": f"{niche_slug}-basics", "label": f"{NICHE or 'Topic'} Basics"},
-            {"id": f"{niche_slug}-mechanisms", "label": "How It Works"},
-            {"id": f"{niche_slug}-contexts", "label": "Contexts and Settings"},
-            {"id": f"{niche_slug}-misconceptions", "label": "Misconceptions"},
-            {"id": f"{niche_slug}-related", "label": "Related Concepts"},
+            {"id": "basics", "label": "Basics"},
+            {"id": "how-it-works", "label": "How It Works"},
+            {"id": "gear-setup", "label": "Gear & Setup"},
+            {"id": "troubleshooting", "label": "Troubleshooting"},
+            {"id": "comparisons", "label": "Comparisons"},
         ]
 
     # FIX: Sanitize titles_pool — ensure it's a list of strings, backfill if too few.
-    raw_titles = out.get("titles_pool")
-    titles_from_llm = []
-    if isinstance(raw_titles, list):
-        for t in raw_titles:
-            if isinstance(t, str) and t.strip():
-                titles_from_llm.append(t.strip())
+        # --- Titles catalog (with hub assignments) ---
+    # New schema: out["catalog"] is a list of {"title": str, "hub": str}
+    catalog = out.get("catalog") or []
+    if not isinstance(catalog, list):
+        catalog = []
 
-    # If LLM gave us fewer than 50 titles (truncation/failure), backfill with deterministic ones
-    if len(titles_from_llm) < 50:
-        print(f"[bootstrap] LLM returned only {len(titles_from_llm)} titles (need ≥50). Backfilling with deterministic titles.")
-        fallback = _deterministic_bootstrap_fallback(NICHE, TITLE_COUNT)
-        fallback_titles = fallback.get("titles_pool") or []
-        # Merge: LLM titles first, then deterministic ones to fill up
-        seen = set(t.lower().strip() for t in titles_from_llm)
-        for t in fallback_titles:
-            if t.lower().strip() not in seen:
-                titles_from_llm.append(t)
-                seen.add(t.lower().strip())
-            if len(titles_from_llm) >= TITLE_COUNT:
-                break
-    titles = titles_from_llm
+    # Back-compat: if older schema provides titles_pool, keep those (hub will be chosen during generation)
+    raw_titles = out.get("titles_pool") or []
+    if isinstance(raw_titles, list) and raw_titles and not catalog:
+        # Older behavior
+        titles_from_llm = raw_titles
+        titles_from_llm = [t.strip() for t in titles_from_llm if isinstance(t, str) and t.strip()]
+        titles_from_llm = _normalize_quotes_list(titles_from_llm)
+        titles_from_llm = _dedupe_preserve_order(titles_from_llm)
+        titles_from_llm = [_titlecase_for_display(t) for t in titles_from_llm]
+        if len(titles_from_llm) > TITLE_COUNT:
+            titles_from_llm = titles_from_llm[:TITLE_COUNT]
+        title_hub_overrides: dict[str, str] = {}
+    else:
+        # New behavior: flatten catalog to a titles list, and keep hub overrides
+        cleaned: list[tuple[str, str]] = []
+        for item in catalog:
+            if not isinstance(item, dict):
+                continue
+            title = (item.get("title") or "").strip()
+            hub = (item.get("hub") or "").strip()
+            if not title or not hub:
+                continue
+            cleaned.append((title, hub))
+
+        # Basic cleanup
+        cleaned = [(t.replace("  ", " ").strip(), h.strip()) for (t, h) in cleaned]
+        # De-dupe by title (keep first hub assignment)
+        seen = set()
+        cleaned2: list[tuple[str, str]] = []
+        for t, h in cleaned:
+            key = t.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            cleaned2.append((t, h))
+        cleaned = cleaned2[:TITLE_COUNT]
+
+        # Hub-balance validation (counts per hub)
+        counts: dict[str, int] = {}
+        for _, h in cleaned:
+            counts[h] = counts.get(h, 0) + 1
+
+        def _hub_balance_ok(counts: dict[str, int], total: int) -> tuple[bool, list[str]]:
+            issues: list[str] = []
+            hub_n = len(counts)
+            if hub_n < 6 or hub_n > 10:
+                issues.append(f"hubs={hub_n} (need 6–10)")
+            min_titles = min(counts.values()) if counts else 0
+            if min_titles and min_titles < 20:
+                small = [f"{k}={v}" for k, v in sorted(counts.items(), key=lambda kv: kv[1]) if v < 20]
+                issues.append("hubs_under_20: " + ", ".join(small[:12]))
+            max_share = 0.0
+            if total > 0 and counts:
+                max_share = max(counts.values()) / total
+            if max_share > 0.30:
+                big = max(counts.items(), key=lambda kv: kv[1])
+                issues.append(f"mega_hub {big[0]} share={big[1]}/{total} ({max_share:.1%})")
+            return (len(issues) == 0, issues)
+
+        ok, issues = _hub_balance_ok(counts, len(cleaned))
+        if not ok:
+            print("[bootstrap] Hub balance check failed. Asking model to rebalance…")
+            fix_prompt = f"""
+You previously produced a catalog of titles assigned to hubs, but the distribution violates constraints.
+Constraints:
+- 6–10 hubs total
+- every hub >= 20 titles
+- no hub > 30% of titles
+- keep the SAME set of titles; do not invent new titles and do not delete titles
+Return strict JSON with:
+- taxonomy.hubs (id, label, description)
+- catalog: array of {{title, hub}} using ONLY hub ids listed
+Here is the current taxonomy and catalog:
+{json.dumps({'taxonomy': out.get('taxonomy', {}), 'catalog': cleaned}, ensure_ascii=False)}
+"""
+            out2 = kimi_json(
+                prompt=fix_prompt,
+                required_json={
+                    "taxonomy": {"hubs": [{"id": "work-boundaries", "label": "Work & Boundaries", "description": "…"}]},
+                    "catalog": [{"title": "A guide title", "hub": "work-boundaries"}],
+                },
+            )
+            if isinstance(out2, dict) and out2.get("catalog") and out2.get("taxonomy"):
+                out = out2
+                cleaned = []
+                for item in out.get("catalog") or []:
+                    if isinstance(item, dict):
+                        title = (item.get("title") or "").strip()
+                        hub = (item.get("hub") or "").strip()
+                        if title and hub:
+                            cleaned.append((title, hub))
+                # De-dupe and cap again
+                seen = set()
+                cleaned2 = []
+                for t, h in cleaned:
+                    key = t.lower()
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    cleaned2.append((t, h))
+                cleaned = cleaned2[:TITLE_COUNT]
+
+        titles = [_titlecase_for_display(t) for (t, _) in cleaned]
+        title_hub_overrides = {t: h for (t, h) in cleaned}
 
     wc_min, wc_max, ideal_min, ideal_max = 900, 1900, 1100, 1600
 
@@ -897,26 +930,11 @@ def main(site_slug: str = "", force_reset: bool = False):
     # Create hub landing pages for navigation (content/hubs/<id>/_index.md)
     ensure_hub_index_pages(hubs)
     patch_hugo_yaml(site_cfg)
+    # Trim to TITLE_COUNT (the model may return more than requested)
+    if len(titles) > TITLE_COUNT:
+        titles = titles[:TITLE_COUNT]
 
     write_titles_pool(titles)
-
-    # Build structured catalog (plan.yaml) with hub assignments and hub-batched ordering
-    catalog = build_catalog(titles, hubs, NICHE)
-    plan_path = Path("data") / "plan.yaml"
-    plan_path.parent.mkdir(parents=True, exist_ok=True)
-    plan_path.write_text(
-        yaml.safe_dump(catalog, sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-    )
-    print(f"[bootstrap] Catalog written: {len(catalog.get('items', []))} titles with hub assignments")
-
-    # Count titles per hub for diagnostics
-    hub_counts = {}
-    for item in catalog.get("items", []):
-        h = item.get("hub", "unknown")
-        hub_counts[h] = hub_counts.get(h, 0) + 1
-    for h, c in sorted(hub_counts.items()):
-        print(f"  Hub '{h}': {c} titles")
 
     ensure_manifest_reset()
 
@@ -948,3 +966,4 @@ if __name__ == "__main__":
     ap.add_argument("--force-reset", action="store_true", help="Wipe existing site.yaml / titles pool / bootstrap receipt before bootstrapping")
     args = ap.parse_args()
     main(site_slug=args.site_slug.strip(), force_reset=bool(args.force_reset))
+

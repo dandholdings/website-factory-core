@@ -1,35 +1,25 @@
-{{/* 
-Smarter internal linking:
-- Prefer same hub
-- Then fill with other hubs
-- Never link to self
-- Max 6 links
-*/}}
+{{/* Related links: prefer Hugo's RelatedContent (configured in hugo.yaml). Fallback to same-hub. */}}
+{{ $limit := default 6 .Site.Params.relatedLimit }}
+{{ $related := slice }}
 
-{{ $current := . }}
-{{ $hub := .Params.hub }}
+{{ if .Site.RegularPages }}
+  {{ $related = (.Site.RegularPages.Related .) | first $limit }}
+{{ end }}
 
-{{/* All other pages */}}
-{{ $pages := where .Site.RegularPages "Section" "pages" }}
-{{ $pages = where $pages "RelPermalink" "ne" .RelPermalink }}
+{{ if lt (len $related) 3 }}
+  {{ $hub := .Params.hub }}
+  {{ if $hub }}
+    {{ $sameHub := where .Site.RegularPages "Params.hub" $hub | where "RelPermalink" "ne" .RelPermalink }}
+    {{ $related = (append $related ((shuffle $sameHub) | first (sub $limit (len $related)))) }}
+  {{ end }}
+{{ end }}
 
-{{/* Same hub first */}}
-{{ $sameHub := where $pages "Params.hub" $hub | first 3 }}
-
-{{/* Other hubs */}}
-{{ $otherHub := where $pages "Params.hub" "ne" $hub | first 3 }}
-
-{{/* Combine */}}
-{{ $related := $sameHub | append $otherHub }}
-
-{{ if gt (len $related) 0 }}
+{{ if ge (len $related) 3 }}
 <section class="related">
-  <h2 class="related-title">Related checks</h2>
-  <ul class="related-list">
-    {{ range $related }}
-      <li>
-        <a href="{{ .RelPermalink }}">{{ .Title }}</a>
-      </li>
+  <h2>Related guides</h2>
+  <ul>
+    {{ range first $limit $related }}
+      <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>
     {{ end }}
   </ul>
 </section>
