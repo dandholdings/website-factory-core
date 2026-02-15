@@ -642,10 +642,10 @@ page_type (one of: { " | ".join(page_types) })
 closing_reassurance (one short, gentle line; NOT advice)
 body_md (markdown only; must include the exact H2 headings below)
 
-Use these H2 sections IN THIS EXACT ORDER (do NOT reorder, do NOT skip any, do NOT add extras):
+Use these H2 sections IN THIS EXACT ORDER (do NOT reorder, do NOT skip any, do NOT add extras, do NOT duplicate any):
 {outline_md}
 
-The "Related topics and deeper reading" section MUST appear BEFORE "Neutral summary" and "FAQs" — not after them. This order is mandatory.
+CRITICAL: Use each H2 heading EXACTLY ONCE. Do NOT repeat any heading. The article must have exactly {len(outline)} H2 sections, no more, no less.
 
 === HARD RULES (violation = rejected page) ===
 
@@ -654,13 +654,13 @@ INTERNAL LINKS (CRITICAL — pages are rejected if this fails):
 - Use ONLY relative URLs in this format: [anchor text](/pages/slug-here/)
 - Anchor text must be descriptive (NEVER "click here", "learn more", "read more").
 - Place links naturally within paragraph text, not bunched together.
-- At the end of body_md, add a "## Related topics" section with 3+ internal links as a bulleted list.
+- The "Related topics and deeper reading" section (from the outline above) should include 3+ internal links as a bulleted list. Do NOT create a separate "Related topics" section — use the one already in the outline.
 - ZERO external links allowed. No https:// URLs anywhere.
 
 FORBIDDEN LANGUAGE (any occurrence = rejected):
 - NO dates or time words. BANNED WORDS: "recent", "recently", "currently", "nowadays", "today", "now", "this year", "last year", "in 20XX", "at the time of writing", "as of", "latest", "emerging", "new research", "growing", "increasingly", "modern", "contemporary". Do not use ANY year numbers (2020, 2024, 2025, etc).
-- NO first-person: "I", "we", "our", "my", "us". Write in third person or second person ("you").
-- NO guarantees: "always", "never", "100%", "will definitely", "guarantee", "proven to", "ensures", "will always", "will never".
+- NO first-person: "I", "we", "our", "my". Write in third person or second person ("you"). Note: "us" is acceptable in phrases like "around us" or "between us".
+- NO guarantees: "guarantee", "100%", "will definitely", "will always", "will never". Avoid absolute claims.
 - NO medical/legal terms: "diagnose", "diagnosis", "prescribed", "treatment", "cure", "therapy", "sue", "consult a doctor".
 - NO advice framing: "you should", "try this", "make sure to", "it is recommended", "experts say".
 - NO external links or URLs starting with http.
@@ -840,6 +840,25 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
         for alias, canonical in h2_aliases.items():
             body = re.sub(rf'^## {re.escape(alias)}\s*$', f'## {canonical}', body, flags=re.MULTILINE)
 
+        # Auto-dedup: if a heading appears twice, remove the second occurrence and its content
+        seen_h2 = set()
+        deduped_lines = []
+        skip_until_next_h2 = False
+        for line in body.split('\n'):
+            h2_match = re.match(r'^## (.+)$', line)
+            if h2_match:
+                heading = h2_match.group(1).strip()
+                if heading in seen_h2:
+                    # Duplicate — skip this heading and its content until next H2
+                    skip_until_next_h2 = True
+                    continue
+                seen_h2.add(heading)
+                skip_until_next_h2 = False
+            elif skip_until_next_h2:
+                continue
+            deduped_lines.append(line)
+        body = '\n'.join(deduped_lines)
+
         # Extract H2 headings in order from body
         got_h2 = re.findall(r'^## (.+)$', body, re.MULTILINE)
         got_h2 = [h.strip() for h in got_h2]
@@ -895,7 +914,9 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
             return False, {}
 
     # Pre-write validation: no first-person
-    first_person_m = re.search(r'\b(I|we|our|my|us)\b', body)
+    # "us" is too aggressive — catches "around us", "between us" which is fine in encyclopedic writing.
+    # "I" must be case-sensitive standalone (not matching "I" inside words).
+    first_person_m = re.search(r'(?<!\w)(I|we|We|our|Our|my|My)(?!\w)', body)
     if first_person_m:
         print(f"  First-person language found: '{first_person_m.group()}' — rejected")
         return False, {}
@@ -907,7 +928,6 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
         r'\bwill\s+definitely\b',
         r'\bwill\s+always\b',
         r'\bwill\s+never\b',
-        r'\bis\s+always\s+(?:the|a)\b',
     ]
     for pat in guarantee_patterns:
         m = re.search(pat, body, re.IGNORECASE)

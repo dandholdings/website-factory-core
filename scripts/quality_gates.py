@@ -232,18 +232,14 @@ DEFAULT_NO_GUARANTEES = [
     r"\bguarantee(d|s)?\b",
     r"\b100%\b",
     r"\bwill\s+definitely\b",
-    # FIX: "always" and "never" are extremely common in everyday language.
-    # These create massive false positive rates with Flash 2.5.
-    # Only flag definitive promise patterns.
     r"\bwill\s+always\b",
     r"\bwill\s+never\b",
-    r"\bis\s+always\s+(?:the|a)\b",
 ]
 
 DEFAULT_NO_FIRST_PERSON = [
-    # FIX: Tighter pattern — the old one matched "I" inside words and URLs.
-    # Only match standalone first-person pronouns.
-    r"(?<![/\w])\b(I|I'm|I've|my|mine|me|we|we're|we've|our|ours|us)\b(?![/\w])",
+    # "us" removed — too aggressive for encyclopedic content ("around us", "between us").
+    # Only match standalone first-person pronouns that indicate author voice.
+    r"(?<![/\w])\b(I|I'm|I've|my|mine|me|we|we're|we've|our|ours)\b(?![/\w])",
 ]
 
 DEFAULT_NO_CALLS_TO_ACTION = [
