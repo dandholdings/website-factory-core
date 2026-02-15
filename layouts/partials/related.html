@@ -1,20 +1,29 @@
-{{/* Related links: prefer Hugo's RelatedContent (configured in hugo.yaml). Fallback to same-hub. */}}
+{{/* Related links: prefer Hugo's Related content API. Fallback to same-hub pages. */}}
 {{ $limit := default 6 .Site.Params.relatedLimit }}
 {{ $related := slice }}
 
-{{ if .Site.RegularPages }}
-  {{ $related = (.Site.RegularPages.Related .) | first $limit }}
+{{/* Try Hugo's built-in Related API first */}}
+{{ with site.RegularPages.Related . }}
+  {{ $related = . | first $limit }}
 {{ end }}
 
-{{ if lt (len $related) 3 }}
+{{/* If too few related, supplement with same-hub pages */}}
+{{ if and (lt (len $related) 3) .Params.hub }}
   {{ $hub := .Params.hub }}
-  {{ if $hub }}
-    {{ $sameHub := where .Site.RegularPages "Params.hub" $hub | where "RelPermalink" "ne" .RelPermalink }}
-    {{ $related = (append $related ((shuffle $sameHub) | first (sub $limit (len $related)))) }}
+  {{ $self := .RelPermalink }}
+  {{ $sameHub := where site.RegularPages "Params.hub" $hub }}
+  {{ $filtered := slice }}
+  {{ range $sameHub }}
+    {{ if ne .RelPermalink $self }}
+      {{ $filtered = $filtered | append . }}
+    {{ end }}
   {{ end }}
+  {{ $need := sub $limit (len $related) }}
+  {{ $extra := shuffle $filtered | first $need }}
+  {{ $related = $related | append $extra }}
 {{ end }}
 
-{{ if ge (len $related) 3 }}
+{{ if ge (len $related) 1 }}
 <section class="related">
   <h2>Related guides</h2>
   <ul>
