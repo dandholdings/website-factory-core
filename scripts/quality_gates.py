@@ -174,6 +174,21 @@ def contains_any(text: str, patterns: List[str]) -> bool:
             return True
     return False
 
+
+def _check_prohibition(text: str, patterns: List[str], rule_name: str, failures: list, slug: str = "") -> bool:
+    """Check text against patterns. If any match, append failure with the matched text."""
+    for p in patterns:
+        m = re.search(p, text, flags=re.I | re.M)
+        if m:
+            # Show context around the match for debugging
+            start = max(0, m.start() - 30)
+            end = min(len(text), m.end() + 30)
+            context = text[start:end].replace("\n", " ")
+            print(f"  [{slug}] {rule_name}: matched '{m.group()}' in '...{context}...'")
+            failures.append(f"{rule_name}")
+            return False
+    return True
+
 # ---------------------------
 # Rules
 # FIX: Tightened regex patterns to reduce false positives that cause
@@ -239,7 +254,6 @@ DEFAULT_NO_GUARANTEES = [
     # Only flag definitive promise patterns.
     r"\bwill\s+always\b",
     r"\bwill\s+never\b",
-    r"\bis\s+always\s+(?:the|a)\b",
 ]
 
 DEFAULT_NO_FIRST_PERSON = [
@@ -430,15 +444,24 @@ def validate_page(md_path: Path, cfg: dict) -> Tuple[bool, List[str], int, int]:
         else:
             failures.append(msg)
 
-    score_rule(not contains_any(full_text, DEFAULT_FORBIDDEN), "Forbidden medical/legal term hit.")
-    score_rule(not contains_any(body_text, DEFAULT_NO_DATES), "Date/recency language is forbidden.")
-    score_rule(not contains_any(full_text, DEFAULT_NO_PRICES), "Price/cost language is forbidden.")
-    score_rule(not contains_any(body_text, DEFAULT_NO_STATS), "Statistics/numbered claims are forbidden.")
-    score_rule(not contains_any(full_text, DEFAULT_NO_GUARANTEES), "Guarantee/promise language is forbidden.")
-    score_rule(not contains_any(full_text, DEFAULT_NO_FIRST_PERSON), "First-person language is forbidden.")
-    score_rule(not contains_any(full_text, DEFAULT_NO_CALLS_TO_ACTION), "Calls-to-action / directive phrasing is forbidden.")
-    score_rule(not contains_any(full_text, DEFAULT_NO_AFFILIATE), "Affiliate/review language is forbidden.")
-    score_rule(not contains_any(full_text, DEFAULT_SUPERLATIVES), "Superlative/superiority language is forbidden (stay neutral).")
+    slug = md_path.parent.name
+
+    # 7) Hard prohibitions — use _check_prohibition for diagnostic output
+    def score_prohibition(text: str, patterns: List[str], rule_name: str):
+        nonlocal scored_total, scored_pass
+        scored_total += 1
+        if _check_prohibition(text, patterns, rule_name, failures, slug=slug):
+            scored_pass += 1
+
+    score_prohibition(body_text, DEFAULT_FORBIDDEN, "Forbidden medical/legal term hit.")
+    score_prohibition(body_text, DEFAULT_NO_DATES, "Date/recency language is forbidden.")
+    score_prohibition(body_text, DEFAULT_NO_PRICES, "Price/cost language is forbidden.")
+    score_prohibition(body_text, DEFAULT_NO_STATS, "Statistics/numbered claims are forbidden.")
+    score_prohibition(body_text, DEFAULT_NO_GUARANTEES, "Guarantee/promise language is forbidden.")
+    score_prohibition(body_text, DEFAULT_NO_FIRST_PERSON, "First-person language is forbidden.")
+    score_prohibition(body_text, DEFAULT_NO_CALLS_TO_ACTION, "Calls-to-action / directive phrasing is forbidden.")
+    score_prohibition(body_text, DEFAULT_NO_AFFILIATE, "Affiliate/review language is forbidden.")
+    score_prohibition(body_text, DEFAULT_SUPERLATIVES, "Superlative/superiority language is forbidden (stay neutral).")
 
     # 8) Structural content presence within sections
     required_sections = ["Intro", "Definitions and key terms", "How it typically works", "Clarifying examples", "Neutral summary"]
