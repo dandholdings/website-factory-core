@@ -629,6 +629,7 @@ def build_prompts(cfg: dict):
     # FIX: Stronger JSON-only instruction for Gemini Flash 2.5
     system = f"""You write calm, reassuring evergreen content for the site "{brand}".
 NO medical, legal, or financial advice. Avoid diagnosing. Avoid giving instructions like a professional.
+CRITICAL: Never use first-person pronouns (I, we, we're, we've, my, mine, me). Use "people", "a person", "individuals", or "you" instead.
 Forbidden words/phrases: {forbidden_str}.
 Return a single valid JSON object only. No markdown fences. No extra text before or after the JSON.
 """
@@ -659,7 +660,12 @@ INTERNAL LINKS (CRITICAL — pages are rejected if this fails):
 
 FORBIDDEN LANGUAGE (any occurrence = rejected):
 - NO dates or time words. BANNED WORDS: "recent", "recently", "currently", "nowadays", "today", "now", "this year", "last year", "in 20XX", "at the time of writing", "as of", "latest", "emerging", "new research", "growing", "increasingly", "modern", "contemporary". Do not use ANY year numbers (2020, 2024, 2025, etc).
-- NO first-person: "I", "we", "our", "my". Write in third person or second person ("you"). Note: "us" is acceptable in phrases like "around us" or "between us".
+- NO first-person pronouns anywhere in the text. This is a STRICT rule. BANNED WORDS: "I", "I'm", "I've", "we", "we're", "we've", "my", "mine", "me". Write in third person or second person ("you") instead.
+  WRONG: "We all experience emotional contagion." → RIGHT: "People experience emotional contagion."
+  WRONG: "When we feel sadness, it spreads." → RIGHT: "When a person feels sadness, it spreads."
+  WRONG: "Our emotions influence others." → RIGHT: "A person's emotions influence others."
+  WRONG: "It connects us as humans." → RIGHT: "It connects people as humans."
+  Note: "us" is acceptable ONLY in fixed phrases like "around us" or "between us" where it cannot be rewritten.
 - NO guarantees: "guarantee", "100%", "will definitely", "will always", "will never". Avoid absolute claims.
 - NO medical/legal terms: "diagnose", "diagnosis", "prescribed", "treatment", "cure", "therapy", "sue", "consult a doctor".
 - NO advice framing: "you should", "try this", "make sure to", "it is recommended", "experts say".
@@ -918,8 +924,8 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
     # "us" and "our" are too aggressive — catches "around us", "our emotions" which is common
     # in encyclopedic writing about emotional/psychological topics.
     # Only flag strong first-person voice: I, we, my, me, mine.
-    # Check body + summary + description to match quality_gates coverage.
-    text_to_check_fp = body + "\n" + str(data.get("summary", "")) + "\n" + str(data.get("description", ""))
+    # Check body + summary + description + closing_reassurance to match quality_gates coverage.
+    text_to_check_fp = body + "\n" + str(data.get("summary", "")) + "\n" + str(data.get("description", "")) + "\n" + str(data.get("closing_reassurance", ""))
     first_person_m = re.search(r"(?<![/\w])\b(I|I'm|I've|my|mine|me|we|we're|we've)\b(?![/\w])", text_to_check_fp)
     if first_person_m:
         print(f"  First-person language found: '{first_person_m.group()}' — rejected")
