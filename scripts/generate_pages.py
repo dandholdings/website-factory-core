@@ -821,6 +821,25 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
     body = (data.get("body_md") or "").strip()
     required_h2 = (cfg.get("generation", {}) or {}).get("outline_h2", [])
     if required_h2:
+        # Auto-fix common H2 variations before checking
+        h2_aliases = {
+            "Related topics": "Related topics and deeper reading",
+            "Related Topics": "Related topics and deeper reading",
+            "Related topics and further reading": "Related topics and deeper reading",
+            "Deeper reading": "Related topics and deeper reading",
+            "Further reading": "Related topics and deeper reading",
+            "Summary": "Neutral summary",
+            "Frequently asked questions": "FAQs",
+            "FAQ": "FAQs",
+            "Misconceptions": "Common misconceptions",
+            "Key terms": "Definitions and key terms",
+            "Definitions": "Definitions and key terms",
+            "Examples": "Clarifying examples",
+            "Introduction": "Intro",
+        }
+        for alias, canonical in h2_aliases.items():
+            body = re.sub(rf'^## {re.escape(alias)}\s*$', f'## {canonical}', body, flags=re.MULTILINE)
+
         # Extract H2 headings in order from body
         got_h2 = re.findall(r'^## (.+)$', body, re.MULTILINE)
         got_h2 = [h.strip() for h in got_h2]

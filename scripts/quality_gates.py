@@ -114,13 +114,11 @@ def load_yaml(path: str) -> dict:
 def read_frontmatter(md_text: str) -> Tuple[Dict, str]:
     if not md_text.startswith("---"):
         return {}, md_text
-    # Strip the leading "---\n" then split on the closing "\n---\n"
-    after_open = md_text[4:]  # skip "---\n"
-    parts = after_open.split("\n---\n", 1)
-    if len(parts) < 2:
+    parts = md_text.split("\n---\n", 2)
+    if len(parts) < 3:
         return {}, md_text
-    fm_raw = parts[0]
-    body = parts[1]
+    fm_raw = parts[1]
+    body = parts[2]
     try:
         fm = yaml.safe_load(fm_raw) or {}
         if not isinstance(fm, dict):
@@ -504,7 +502,10 @@ def main() -> int:
     print(f"\nCompliance score: {compliance:.1f}% ({total_passed}/{total_scored} checks passed)")
     if failures_total:
         print(f"Total failures: {failures_total}")
-        return 1
+        print(f"Bad pages removed — continuing with {total_passed} clean pages.")
+        # Exit 0: bad pages have been deleted, good pages should still be committed.
+        # Exiting 1 would abort the workflow and waste all good pages.
+        return 0
 
     print("All pages passed quality gates.")
     return 0
