@@ -859,18 +859,55 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
         print(f"  External links found ({len(external_links)}) — rejected")
         return False, {}
 
-    # Pre-write validation: no date/recency language
-    recency_patterns = [r'\b(19|20)\d{2}\b', r'\brecently\b', r'\bcurrently\b', r'\bthis\s+year\b', r'\blast\s+year\b']
+    # Pre-write validation: no date/recency language (must match quality_gates.py exactly)
+    recency_patterns = [
+        r'\b(19|20)\d{2}\b',           # years
+        r'\brecently\b',
+        r'\bcurrently\b',
+        r'\bthis\s+year\b',
+        r'\blast\s+year\b',
+        r'(?<!\bto)\btoday\b',          # "today" but not "up to today"
+        r'(?:^|[.!?]\s+)[A-Z][^.]*\bnow\b',  # "now" at sentence start
+    ]
     for pat in recency_patterns:
-        if re.search(pat, body, re.IGNORECASE):
-            match = re.search(pat, body, re.IGNORECASE)
-            print(f"  Date/recency language found: '{match.group()}' — rejected")
+        m = re.search(pat, body, re.MULTILINE)
+        if m:
+            print(f"  Date/recency language found: '{m.group().strip()[:40]}' — rejected")
             return False, {}
 
     # Pre-write validation: no first-person
-    if re.search(r'\b(I|we|our|my|us)\b', body):
-        match = re.search(r'\b(I|we|our|my|us)\b', body)
-        print(f"  First-person language found: '{match.group()}' — rejected")
+    first_person_m = re.search(r'\b(I|we|our|my|us)\b', body)
+    if first_person_m:
+        print(f"  First-person language found: '{first_person_m.group()}' — rejected")
+        return False, {}
+
+    # Pre-write validation: no guarantee/promise language
+    guarantee_patterns = [
+        r'\bguarantee[ds]?\b',
+        r'\b100%\b',
+        r'\bwill\s+definitely\b',
+        r'\bwill\s+always\b',
+        r'\bwill\s+never\b',
+        r'\bis\s+always\s+(?:the|a)\b',
+    ]
+    for pat in guarantee_patterns:
+        m = re.search(pat, body, re.IGNORECASE)
+        if m:
+            print(f"  Guarantee language found: '{m.group()}' — rejected")
+            return False, {}
+
+    # Pre-write validation: paragraph length (max 3 sentences per paragraph)
+    max_sent = 3
+    bad_paras = 0
+    for para in re.split(r'\n{2,}', body.strip()):
+        para = para.strip()
+        if not para or para.startswith('#') or para.startswith('-') or para.startswith('*') or re.match(r'^\d+\.', para) or para.startswith('```'):
+            continue
+        sc = len(re.findall(r'[.!?](?:\s|$)', para))
+        if sc > max_sent:
+            bad_paras += 1
+    if bad_paras > 0:
+        print(f"  {bad_paras} paragraphs exceed {max_sent} sentences — rejected")
         return False, {}
 
     return True, data
