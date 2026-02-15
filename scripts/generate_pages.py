@@ -718,7 +718,7 @@ TONE & STRUCTURE:
 - CRITICAL PARAGRAPH RULE: Every paragraph must be 2–3 sentences maximum. NEVER write a paragraph with 4 or more sentences. If you need more detail, start a new paragraph. This is a hard limit that causes immediate rejection.
 - Use ONLY H2 (##) and H3 (###) headings. No H1, no H4+.
 - FAQs: 4-6 Q&As using ### headings for each question.
-- Wordcount: minimum {wc_min} words, target {wc_ideal_min}–{wc_ideal_max}, maximum {wc_max}.
+- WORD COUNT (CRITICAL): You MUST write at least {wc_min} words in body_md. Target {wc_ideal_min}–{wc_ideal_max} words. Pages under {wc_min} words are automatically rejected. Each H2 section should have at least 50–80 words. Do NOT be brief — expand with examples, distinctions, and context.
 - Do not include the closing reassurance inside body_md; put it in closing_reassurance.
 {closing_hint}
 """
@@ -852,6 +852,11 @@ def select_pages_for_regen(content_root, contract_hash: str) -> list:
 
 def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinned_hub: str = "", pinned_page_type: str = ""):
     """Returns (ok, data_dict)."""
+    generation = (cfg.get("generation") or {})
+    wc_cfg = generation.get("wordcount") or {}
+    wc_min = int(wc_cfg.get("min") or 900)
+    wc_max = int(wc_cfg.get("max") or 1900)
+
     extra = ""
     if pinned_hub:
         extra += f"\nHub (must use exactly): {pinned_hub}"
@@ -999,6 +1004,50 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
     if bad_paras > 0:
         print(f"  {bad_paras} paragraphs exceed {max_sent} sentences — rejected")
         return False, {}
+
+    # Pre-write validation: word count (must match quality_gates thresholds)
+    wc = len(re.findall(r'\b[\w\']+\b', body))
+    if wc < wc_min:
+        print(f"  Word count too low: {wc} (min {wc_min}) — rejected")
+        return False, {}
+    if wc > wc_max:
+        print(f"  Word count too high: {wc} (max {wc_max}) — rejected")
+        return False, {}
+
+    # Pre-write validation: required sections have enough content (must match quality_gates)
+    required_sections = ["Intro", "Definitions and key terms", "How it typically works", "Clarifying examples", "Neutral summary"]
+    for sec_name in required_sections:
+        # Extract text between this H2 and the next H2
+        pat = re.compile(rf"^##\s+{re.escape(sec_name)}\s*$", re.M)
+        m = pat.search(body)
+        if not m:
+            print(f"  Missing required section: \"{sec_name}\" — rejected")
+            return False, {}
+        start = m.end()
+        rest = body[start:]
+        m2 = re.search(r"^##\s+", rest, flags=re.M)
+        sec_text = (rest[:m2.start()] if m2 else rest).strip()
+        sec_wc = len(re.findall(r'\b[\w\']+\b', sec_text))
+        if sec_wc < 40:
+            print(f"  Section \"{sec_name}\" too thin: {sec_wc} words (min 40) — rejected")
+            return False, {}
+
+    # Pre-write validation: FAQ count (must match quality_gates faq_min=4)
+    faq_section_pat = re.compile(r"^##\s+FAQs?\s*$", re.M)
+    faq_m = faq_section_pat.search(body)
+    if faq_m:
+        faq_text = body[faq_m.end():]
+        faq_next = re.search(r"^##\s+", faq_text, flags=re.M)
+        if faq_next:
+            faq_text = faq_text[:faq_next.start()]
+        faq_q_count = len(re.findall(r"^###\s+.+", faq_text, flags=re.M))
+        if faq_q_count == 0:
+            faq_q_count = len(re.findall(r"^\*\*Q[:\s].+\*\*", faq_text, flags=re.M))
+        if faq_q_count == 0:
+            faq_q_count = len(re.findall(r"^\*\*.+\?\*\*", faq_text, flags=re.M))
+        if faq_q_count < 4:
+            print(f"  Too few FAQs: {faq_q_count} (min 4) — rejected")
+            return False, {}
 
     return True, data
 
