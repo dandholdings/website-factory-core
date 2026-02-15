@@ -1018,6 +1018,7 @@ def main():
 
     titles = []
     if todo_items:
+        # Plan items are already ordered by hub (from bootstrap catalog)
         titles = [it.get("title", "").strip() for it in todo_items if it.get("title")]
     else:
         titles = load_titles()

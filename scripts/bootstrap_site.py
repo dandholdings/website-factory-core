@@ -530,6 +530,62 @@ def write_titles_pool(titles: list):
         uniq.append(t)
     TITLES_POOL_PATH.write_text("\n".join(uniq) + "\n", encoding="utf-8")
 
+def build_catalog(titles: list, hubs: list, niche: str) -> dict:
+    """Build a structured plan.yaml catalog from flat titles + hubs.
+
+    Assigns each title to a hub based on keyword matching, then orders
+    by hub so generation happens in hub batches (critical for internal linking).
+    """
+    hub_ids = [h["id"] for h in hubs if isinstance(h, dict) and h.get("id")]
+    hub_labels = {h["id"]: h.get("label", h["id"]) for h in hubs if isinstance(h, dict)}
+
+    if not hub_ids:
+        hub_ids = ["general"]
+        hub_labels = {"general": "General"}
+
+    # Build keyword map: hub_id -> set of keywords from the label + id
+    hub_keywords = {}
+    for hid in hub_ids:
+        words = set()
+        words.update(hid.lower().replace("-", " ").split())
+        label = hub_labels.get(hid, "")
+        words.update(label.lower().replace("-", " ").split())
+        # Remove very common words that don't help matching
+        words -= {"and", "the", "of", "a", "an", "in", "to", "for", "is", "it", "on", "or"}
+        hub_keywords[hid] = words
+
+    items = []
+    for title in titles:
+        t = (title or "").strip()
+        if not t:
+            continue
+        slug = re.sub(r"[^a-z0-9]+", "-", t.lower().strip())
+        slug = re.sub(r"-+", "-", slug).strip("-")[:80]
+
+        # Score each hub by keyword overlap with the title
+        title_words = set(t.lower().replace("-", " ").replace("?", "").split())
+        best_hub = hub_ids[0]
+        best_score = -1
+        for hid in hub_ids:
+            score = len(title_words & hub_keywords[hid])
+            if score > best_score:
+                best_score = score
+                best_hub = hid
+
+        items.append({
+            "title": t,
+            "slug": slug,
+            "hub": best_hub,
+            "status": "todo",
+        })
+
+    # Sort by hub so generation happens in hub batches
+    hub_order = {hid: i for i, hid in enumerate(hub_ids)}
+    items.sort(key=lambda x: (hub_order.get(x.get("hub", ""), 999), x.get("title", "")))
+
+    return {"items": items}
+
+
 def patch_hugo_yaml(site_cfg: dict):
     """Keep hugo.yaml minimal but aligned to site identity for Cloudflare Pages."""
     if not HUGO_PATH.exists():
@@ -824,6 +880,24 @@ def main(site_slug: str = "", force_reset: bool = False):
     patch_hugo_yaml(site_cfg)
 
     write_titles_pool(titles)
+
+    # Build structured catalog (plan.yaml) with hub assignments and hub-batched ordering
+    catalog = build_catalog(titles, hubs, NICHE)
+    plan_path = Path("data") / "plan.yaml"
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    plan_path.write_text(
+        yaml.safe_dump(catalog, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+    print(f"[bootstrap] Catalog written: {len(catalog.get('items', []))} titles with hub assignments")
+
+    # Count titles per hub for diagnostics
+    hub_counts = {}
+    for item in catalog.get("items", []):
+        h = item.get("hub", "unknown")
+        hub_counts[h] = hub_counts.get(h, 0) + 1
+    for h, c in sorted(hub_counts.items()):
+        print(f"  Hub '{h}': {c} titles")
 
     ensure_manifest_reset()
 
