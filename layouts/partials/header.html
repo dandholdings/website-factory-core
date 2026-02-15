@@ -10,6 +10,11 @@
     </nav>
 
     <div class="header-actions">
+      <div class="site-search" role="search">
+        <button id="searchOpen" class="search-toggle" type="button" aria-label="Open search" title="Search">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+      </div>
       <button
         id="themeToggle"
         class="theme-toggle"
@@ -20,6 +25,15 @@
         <span class="theme-icon" aria-hidden="true">◐</span>
       </button>
     </div>
+  </div>
+
+  {{/* Search overlay */}}
+  <div id="searchOverlay" class="search-overlay" hidden>
+    <div class="search-box">
+      <input id="searchInput" type="search" placeholder="Search guides…" autocomplete="off" aria-label="Search guides" />
+      <button id="searchClose" class="search-close" type="button" aria-label="Close search">&times;</button>
+    </div>
+    <ul id="searchResults" class="search-results" role="listbox"></ul>
   </div>
 
   <script>
@@ -41,5 +55,47 @@
         setIcon();
       });
     })();
+  </script>
+
+  <script>
+  (function(){
+    var idx=null, overlay=document.getElementById("searchOverlay"),
+        input=document.getElementById("searchInput"),
+        results=document.getElementById("searchResults"),
+        openBtn=document.getElementById("searchOpen"),
+        closeBtn=document.getElementById("searchClose");
+
+    function open(){
+      overlay.hidden=false; input.value=""; results.innerHTML="";
+      setTimeout(function(){input.focus()},50);
+      if(!idx){fetch("/index.json").then(function(r){return r.json()}).then(function(d){idx=d}).catch(function(){idx=[]})}
+    }
+    function close(){overlay.hidden=true; input.value="";}
+
+    openBtn.addEventListener("click",open);
+    closeBtn.addEventListener("click",close);
+    document.addEventListener("keydown",function(e){
+      if(e.key==="/"&&!overlay.hidden===false&&document.activeElement.tagName!=="INPUT"&&document.activeElement.tagName!=="TEXTAREA"){e.preventDefault();open()}
+      if(e.key==="Escape"&&!overlay.hidden)close();
+    });
+    overlay.addEventListener("click",function(e){if(e.target===overlay)close()});
+
+    input.addEventListener("input",function(){
+      if(!idx){results.innerHTML="";return}
+      var q=input.value.trim().toLowerCase();
+      if(q.length<2){results.innerHTML="";return}
+      var words=q.split(/\s+/);
+      var matches=idx.filter(function(p){
+        var hay=(p.t+" "+p.s+" "+p.h).toLowerCase();
+        return words.every(function(w){return hay.indexOf(w)!==-1});
+      }).slice(0,8);
+      if(matches.length===0){results.innerHTML='<li class="search-empty">No results found</li>';return}
+      results.innerHTML=matches.map(function(p){
+        return '<li role="option"><a href="'+p.u+'"><strong>'+esc(p.t)+'</strong>'+(p.s?'<span>'+esc(p.s)+'</span>':'')+'</a></li>';
+      }).join("");
+    });
+
+    function esc(s){var d=document.createElement("div");d.textContent=s;return d.innerHTML}
+  })();
   </script>
 </header>
