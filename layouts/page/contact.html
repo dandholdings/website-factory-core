@@ -1,10 +1,4 @@
 {{ define "main" }}
-{{ $brand := .Site.Title }}
-{{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $brand = . }}{{ end }}{{ end }}{{ end }}
-{{ $email := "" }}
-{{ with site.Data.site }}{{ with .site }}{{ with .contact_email }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
-{{ if not $email }}{{ with .Site.Params.factory }}{{ with .contactEmail }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
-
 <article class="page">
   <header class="page-header">
     {{ partial "breadcrumbs.html" . }}
@@ -13,28 +7,10 @@
   </header>
 
   <div class="page-body content">
-    <h2>General enquiries</h2>
-    {{ if $email }}
-    <p>For general enquiries, corrections, feedback, or topic suggestions, please contact us at:</p>
-    <p><strong><a href="mailto:{{ $email }}">{{ $email }}</a></strong></p>
-    {{ else }}
-    <p class="muted">Contact information has not been configured for this site.</p>
-    {{ end }}
-
-    <p>Please include the page URL if you are reporting an error or issue with a specific guide.</p>
-
-    <h2>What we can help with</h2>
-    <p>We welcome messages about factual errors in guides, suggestions for new topics, feedback on clarity or structure, and general questions about how the site works.</p>
-
-    <h2>What we cannot help with</h2>
-    <p>{{ $brand }} does not provide personal advice of any kind. We are unable to respond to enquiries seeking medical, psychological, legal, financial, or professional guidance. If you require professional support, please consult a qualified practitioner in your area.</p>
-    <p>We do not provide individual consultations, personalised recommendations, or responses to questions about specific personal situations.</p>
-
-    <h2>Response times</h2>
-    <p>We aim to review all messages but cannot guarantee individual responses. Messages reporting factual errors or significant issues will be prioritised.</p>
-
     {{ .Content }}
   </div>
+
+  {{ partial "ad-slot.html" (dict "ctx" . "slot" "page_bottom") }}
 </article>
 {{ end }}
 

@@ -1,10 +1,4 @@
 {{ define "main" }}
-{{ $brand := .Site.Title }}
-{{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $brand = . }}{{ end }}{{ end }}{{ end }}
-{{ $email := "" }}
-{{ with site.Data.site }}{{ with .site }}{{ with .contact_email }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
-{{ if not $email }}{{ with .Site.Params.factory }}{{ with .contactEmail }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
-
 <article class="page">
   <header class="page-header">
     {{ partial "breadcrumbs.html" . }}
@@ -13,35 +7,10 @@
   </header>
 
   <div class="page-body content">
-    <h2>Commitment to neutrality</h2>
-    <p>{{ $brand }} is committed to presenting information in a neutral, balanced, and factual manner. Guides do not advocate for particular viewpoints, endorse products or services, or attempt to persuade readers toward specific conclusions. The goal is to explain topics clearly and let readers form their own understanding.</p>
-
-    <h2>No advice or recommendations</h2>
-    <p>Content on this site does not constitute medical, psychological, legal, financial, or professional advice of any kind. Guides do not recommend treatments, diagnose conditions, suggest legal strategies, or provide financial recommendations. Readers who require professional guidance should consult a qualified practitioner.</p>
-
-    <h2>Content production process</h2>
-    <p>Each guide is developed using a structured editorial framework. This process includes identifying a specific question or concept, researching relevant information, drafting content according to a consistent outline, and reviewing the result for clarity, accuracy, and neutrality.</p>
-    <p>Content is drafted using structured research tools and automated editorial assistants. These tools help ensure consistency across guides and adherence to the site's editorial standards. All content is reviewed before publication.</p>
-
-    <h2>Editorial standards</h2>
-    <p>All guides on {{ $brand }} adhere to the following standards:</p>
-    <p>Guides use neutral, third-person language and avoid first-person voice. They do not include date-specific references, statistical claims without context, or absolute guarantees. They avoid sensationalist phrasing, exaggerated claims, and emotionally manipulative language.</p>
-    <p>Each guide follows a consistent structure that includes an introduction, key definitions, practical context, clarifying examples, common misconceptions, and a frequently asked questions section. This structure ensures that readers can find relevant information quickly and compare explanations across topics.</p>
-
-    <h2>Corrections and updates</h2>
-    <p>If an error or inaccuracy is identified in any guide, the editorial team will review and update the content. Readers are encouraged to report potential issues via the <a href="{{ "/contact/" | relURL }}">contact page</a>.</p>
-    <p>Guides may be updated periodically to improve clarity or to reflect changes in the general understanding of a topic. The site does not publish retractions or corrections notices for minor editorial improvements.</p>
-
-    <h2>Avoiding sensationalism</h2>
-    <p>{{ $brand }} does not publish content designed to generate alarm, controversy, or emotional reactions. Guides are written in a calm, measured tone appropriate for informational reference material. Topics are presented with appropriate nuance and context.</p>
-
-    {{ if $email }}
-    <h2>Contact</h2>
-    <p>Questions about this editorial policy can be directed to <a href="mailto:{{ $email }}">{{ $email }}</a>.</p>
-    {{ end }}
-
     {{ .Content }}
   </div>
+
+  {{ partial "ad-slot.html" (dict "ctx" . "slot" "page_bottom") }}
 </article>
 {{ end }}
 

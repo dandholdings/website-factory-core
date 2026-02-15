@@ -1,10 +1,4 @@
 {{ define "main" }}
-{{ $brand := .Site.Title }}
-{{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $brand = . }}{{ end }}{{ end }}{{ end }}
-{{ $email := "" }}
-{{ with site.Data.site }}{{ with .site }}{{ with .contact_email }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
-{{ if not $email }}{{ with .Site.Params.factory }}{{ with .contactEmail }}{{ $email = . }}{{ end }}{{ end }}{{ end }}
-
 <article class="page">
   <header class="page-header">
     {{ partial "breadcrumbs.html" . }}
@@ -13,31 +7,10 @@
   </header>
 
   <div class="page-body content">
-    <h2>Informational purposes only</h2>
-    <p>All content published on <strong>{{ $brand }}</strong> is provided for general informational and educational purposes only. The information on this site is not intended to be a substitute for professional advice, diagnosis, or treatment.</p>
-
-    <h2>Not professional advice</h2>
-    <p>Nothing on this site constitutes medical, psychological, legal, financial, or any other form of professional advice. The content does not create a professional–client relationship of any kind. Readers should not rely on information found on this site as a basis for making decisions about their health, finances, legal matters, or any other personal circumstances.</p>
-
-    <h2>No liability</h2>
-    <p>{{ $brand }}, its operators, contributors, and affiliates accept no liability for any loss, damage, or adverse outcome arising from the use of or reliance on information published on this site. Use of this site and its content is entirely at your own risk and discretion.</p>
-
-    <h2>Accuracy and completeness</h2>
-    <p>While reasonable efforts are made to ensure that information on this site is accurate and current, no representations or warranties of any kind are made regarding the completeness, accuracy, reliability, suitability, or availability of the content. Information may contain errors, omissions, or may become outdated over time.</p>
-
-    <h2>External links</h2>
-    <p>This site may contain links to external websites or resources. These links are provided for convenience and informational purposes only. {{ $brand }} does not endorse, control, or accept responsibility for the content, privacy policies, or practices of any third-party websites.</p>
-
-    <h2>Consult a professional</h2>
-    <p>If you have concerns about your health, legal situation, financial circumstances, or any other matter requiring professional expertise, please consult a qualified professional in your area. Do not delay seeking professional advice because of information you have read on this site.</p>
-
-    {{ if $email }}
-    <h2>Questions</h2>
-    <p>If you have questions about this disclaimer, contact us at <a href="mailto:{{ $email }}">{{ $email }}</a>.</p>
-    {{ end }}
-
     {{ .Content }}
   </div>
+
+  {{ partial "ad-slot.html" (dict "ctx" . "slot" "page_bottom") }}
 </article>
 {{ end }}
 
