@@ -562,6 +562,26 @@ def build_internal_link_hints(content_root="content/pages", limit: int = 40) -> 
     return "\n".join([f"- [{t}](/pages/{s}/)" for t, s in items if t and s])
 
 
+def _generate_sibling_link_hints(titles_pool_path: Path, limit: int = 20) -> str:
+    """Generate internal link hints from the titles pool for fresh bootstraps."""
+    if not titles_pool_path.exists():
+        return ""
+    try:
+        titles = [t.strip() for t in titles_pool_path.read_text(encoding="utf-8").splitlines() if t.strip()]
+    except Exception:
+        return ""
+    if not titles:
+        return ""
+    # Pick a random sample and convert to slug format
+    sample = random.sample(titles, min(limit, len(titles)))
+    items = []
+    for t in sample:
+        s = slugify(t)
+        if s:
+            items.append(f"- [{t}](/pages/{s}/)")
+    return "\n".join(items)
+
+
 def build_prompts(cfg: dict):
     site = cfg.get("site", {}) if isinstance(cfg, dict) else {}
     taxonomy = cfg.get("taxonomy", {}) if isinstance(cfg, dict) else {}
@@ -618,23 +638,31 @@ body_md (markdown only; must include the exact H2 headings below)
 Use these H2 sections exactly:
 {outline_md}
 
-Rules:
-- Neutral, encyclopedic tone (beginner-friendly). No hype, no fear framing.
-- No medical, legal, or financial advice.
-- No dates or time-sensitive language (no years, "recent", "currently", "this year", "today", "now").
-- No prices, costs, or financial claims.
-- No guarantees/promises ("always", "never", "100%", "will definitely", "guarantee").
-- No first-person language ("I", "we", "our", "my").
-- No calls-to-action or directive language ("you should", "try this", "make sure to", "sign up", "buy", "download").
-- No affiliate/product review language (affiliate, sponsored, review, coupon, discount).
-- Comparisons must be neutral (avoid superlatives like "best", "worst", "better than").
-- Short paragraphs: 2–3 sentences max.
+=== HARD RULES (violation = rejected page) ===
+
+INTERNAL LINKS (CRITICAL — pages are rejected if this fails):
+- You MUST include at least 3 internal links in body_md.
+- Use ONLY relative URLs in this format: [anchor text](/pages/slug-here/)
+- Anchor text must be descriptive (NEVER "click here", "learn more", "read more").
+- Place links naturally within paragraph text, not bunched together.
+- At the end of body_md, add a "## Related topics" section with 3+ internal links as a bulleted list.
+- ZERO external links allowed. No https:// URLs anywhere.
+
+FORBIDDEN LANGUAGE (any occurrence = rejected):
+- NO dates or time words: "recent", "recently", "currently", "nowadays", "today", "now", "this year", "in 20XX", "at the time of writing", "as of", "latest", "emerging", "new research", "growing", "increasingly".
+- NO first-person: "I", "we", "our", "my", "us". Write in third person or second person ("you").
+- NO guarantees: "always", "never", "100%", "will definitely", "guarantee", "proven to", "ensures".
+- NO medical/legal terms: "diagnose", "diagnosis", "prescribed", "treatment", "cure", "therapy", "sue", "consult a doctor".
+- NO advice framing: "you should", "try this", "make sure to", "it is recommended", "experts say".
+- NO external links or URLs starting with http.
+- NO affiliate/commercial language: "best", "worst", "buy", "sign up", "download", "review", "sponsored".
+
+TONE & STRUCTURE:
+- Neutral, encyclopedic, beginner-friendly. No hype, no fear.
+- Short paragraphs: 2–3 sentences maximum per paragraph.
 - Use ONLY H2 (##) and H3 (###) headings. No H1, no H4+.
-- Include at least 3 contextually relevant internal links using ONLY relative URLs like /pages/<slug>/ (no external links).
-- Wordcount: minimum {wc_min} words, target {wc_ideal_min}–{wc_ideal_max}, maximum {wc_max}.
-- Keep tone grounded and human, not clinical.
-- No "diagnose/diagnosis/prescribed/guaranteed/sue".
 - FAQs: 4-6 Q&As using ### headings for each question.
+- Wordcount: minimum {wc_min} words, target {wc_ideal_min}–{wc_ideal_max}, maximum {wc_max}.
 - Do not include the closing reassurance inside body_md; put it in closing_reassurance.
 {closing_hint}
 """
@@ -660,11 +688,13 @@ def compute_contract_hash(site_config_path: str) -> str:
 def read_markdown_frontmatter(md_text: str):
     if not md_text.startswith("---"):
         return {}, md_text
-    parts = md_text.split("\n---\n", 2)
-    if len(parts) < 3:
+    # Strip the leading "---\n" then split on the closing "\n---\n"
+    after_open = md_text[4:]  # skip "---\n"
+    parts = after_open.split("\n---\n", 1)
+    if len(parts) < 2:
         return {}, md_text
-    fm_raw = parts[1]
-    body = parts[2]
+    fm_raw = parts[0]
+    body = parts[1]
     try:
         fm = yaml.safe_load(fm_raw) or {}
         if not isinstance(fm, dict):
@@ -798,6 +828,19 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
         return False, {}
 
     data["body_md"] = body
+
+    # Pre-write validation: internal links
+    internal_link_count = len(re.findall(r'\[.*?\]\(/pages/[a-z0-9-]+/\)', body))
+    if internal_link_count < 3:
+        print(f"  Too few internal links: {internal_link_count} (need 3+)")
+        return False, {}
+
+    # Pre-write validation: no external links
+    external_links = re.findall(r'https?://', body)
+    if external_links:
+        print(f"  External links found ({len(external_links)}) — rejected")
+        return False, {}
+
     return True, data
 
 def write_page(slug: str, data: dict, close: str, contract_hash: str, prompt_hash: str) -> Path:
@@ -903,7 +946,12 @@ def main():
     # Provide internal link candidates so the model can reliably include them
     link_hints = build_internal_link_hints(CONTENT_ROOT, limit=40)
     if link_hints:
-        page_prompt = page_prompt + "\n\nInternal links you MAY use (choose at least 3; do not invent links; no external links):\n" + link_hints + "\n"
+        page_prompt = page_prompt + f"\n\n=== AVAILABLE INTERNAL LINKS (use at least 3 from this list) ===\n{link_hints}\n\nYou MUST use links from this list. Do NOT invent slugs. Do NOT use external URLs.\n"
+    else:
+        # Fresh bootstrap: no pages exist yet. Generate plausible sibling slugs from the titles pool.
+        sibling_slugs = _generate_sibling_link_hints(TITLES_POOL_PATH, limit=20)
+        if sibling_slugs:
+            page_prompt = page_prompt + f"\n\n=== AVAILABLE INTERNAL LINKS (use at least 3 from this list) ===\n{sibling_slugs}\n\nYou MUST use links from this list. Do NOT invent slugs. Do NOT use external URLs.\n"
 
     os.makedirs(CONTENT_ROOT, exist_ok=True)
     contract_hash = compute_contract_hash(site_cfg_path)
