@@ -1,0 +1,59 @@
+{{ define "main" }}
+{{ $brand := .Site.Title }}
+{{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $brand = . }}{{ end }}{{ end }}{{ end }}
+
+<article class="page concept-map">
+  <header class="page-header">
+    {{ partial "breadcrumbs.html" . }}
+    <h1 class="page-title">{{ .Title }}</h1>
+    {{ with .Params.summary }}<div class="lede"><strong>{{ . }}</strong></div>{{ end }}
+  </header>
+
+  <div class="page-body content">
+    {{/* Render any custom markdown content from the .md file */}}
+    {{ .Content }}
+
+    {{/* Auto-generated concept map from site taxonomy */}}
+    {{ $hubs := slice }}
+    {{ with site.Data.site }}{{ with .taxonomy }}{{ with .hubs }}{{ $hubs = . }}{{ end }}{{ end }}{{ end }}
+
+    {{ if gt (len $hubs) 0 }}
+    <section class="concept-overview">
+      <h2>Topic overview</h2>
+      <p>This site covers {{ len $hubs }} core topic areas. Each area contains guides that explore specific questions, definitions, and examples. Select any topic below to see all related guides.</p>
+
+      <div class="concept-grid">
+        {{ range $hubs }}
+          {{ $pages := where site.RegularPages "Params.hub" .id }}
+          {{ if gt (len $pages) 0 }}
+          <div class="concept-hub">
+            <h3><a href="{{ (printf "/hubs/%s/" .id) | relURL }}">{{ .label }}</a></h3>
+            {{ with .description }}<p class="hub-desc">{{ . }}</p>{{ end }}
+            <ul class="concept-pages">
+              {{ range first 8 $pages }}
+                <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>
+              {{ end }}
+              {{ if gt (len $pages) 8 }}
+                <li class="more"><a href="{{ (printf "/hubs/%s/" .id) | relURL }}">… and {{ sub (len $pages) 8 }} more</a></li>
+              {{ end }}
+            </ul>
+          </div>
+          {{ end }}
+        {{ end }}
+      </div>
+    </section>
+
+    {{/* Cross-references: show how hubs relate */}}
+    <section class="concept-connections">
+      <h2>How these topics connect</h2>
+      <p>Many guides span multiple areas. A question about one topic often touches on others. The links within each guide help you move between related ideas without losing context.</p>
+      <p>Start with any topic that interests you. Each guide includes links to related pages, so you can explore naturally from any starting point.</p>
+    </section>
+    {{ end }}
+  </div>
+
+  {{ partial "ad-slot.html" (dict "ctx" . "slot" "page_bottom") }}
+</article>
+{{ end }}
+
+{{ define "sidebar" }}{{ partial "sidebar.html" . }}{{ end }}

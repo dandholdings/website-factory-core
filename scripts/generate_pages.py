@@ -599,11 +599,19 @@ def _generate_sibling_link_hints(titles_pool_path: Path, limit: int = 20) -> str
     if not titles_pool_path.exists():
         return ""
     try:
-        titles = [t.strip() for t in titles_pool_path.read_text(encoding="utf-8").splitlines() if t.strip()]
+        raw_lines = [t.strip() for t in titles_pool_path.read_text(encoding="utf-8").splitlines() if t.strip()]
     except Exception:
         return ""
-    if not titles:
+    if not raw_lines:
         return ""
+    # Parse hub\tTitle format
+    titles = []
+    for line in raw_lines:
+        if "\t" in line:
+            _, title = line.split("\t", 1)
+            titles.append(title.strip())
+        else:
+            titles.append(line)
     # Pick a random sample and convert to slug format
     sample = random.sample(titles, min(limit, len(titles)))
     items = []
@@ -684,11 +692,11 @@ CRITICAL: Use each H2 heading EXACTLY ONCE. Do NOT repeat any heading. The artic
 === HARD RULES (violation = rejected page) ===
 
 INTERNAL LINKS (CRITICAL — pages are rejected if this fails):
-- You MUST include at least 3 internal links in body_md.
+- You MUST include at least 6 internal links total in body_md.
+- CONTEXTUAL LINKS: Place at least 3 internal links naturally within paragraph text across the body sections (Intro through Common misconceptions). These must flow naturally in-sentence, e.g. "This pattern resembles [emotional mirroring in groups](/pages/emotional-mirroring-in-groups/) and can intensify over time." Do NOT cluster links together — spread them across different sections.
+- RELATED SECTION: The "Related topics and deeper reading" section should include 3+ additional internal links as a bulleted list.
 - Use ONLY relative URLs in this format: [anchor text](/pages/slug-here/)
 - Anchor text must be descriptive (NEVER "click here", "learn more", "read more").
-- Place links naturally within paragraph text, not bunched together.
-- The "Related topics and deeper reading" section (from the outline above) should include 3+ internal links as a bulleted list. Do NOT create a separate "Related topics" section — use the one already in the outline.
 - ZERO external links allowed. No https:// URLs anywhere.
 
 FORBIDDEN LANGUAGE (any occurrence = rejected):
@@ -924,10 +932,10 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
 
     data["body_md"] = body
 
-    # Pre-write validation: internal links
+    # Pre-write validation: internal links (need 6+: 3 contextual + 3 in related)
     internal_link_count = len(re.findall(r'\[.*?\]\(/pages/[a-z0-9-]+/\)', body))
-    if internal_link_count < 3:
-        print(f"  Too few internal links: {internal_link_count} (need 3+)")
+    if internal_link_count < 6:
+        print(f"  Too few internal links: {internal_link_count} (need 6+)")
         return False, {}
 
     # Pre-write validation: no external links
@@ -1222,12 +1230,12 @@ def main():
     # Provide internal link candidates so the model can reliably include them
     link_hints = build_internal_link_hints(CONTENT_ROOT, limit=40)
     if link_hints:
-        page_prompt = page_prompt + f"\n\n=== AVAILABLE INTERNAL LINKS (use at least 3 from this list) ===\n{link_hints}\n\nYou MUST use links from this list. Do NOT invent slugs. Do NOT use external URLs.\n"
+        page_prompt = page_prompt + f"\n\n=== AVAILABLE INTERNAL LINKS (use at least 6 from this list) ===\n{link_hints}\n\nYou MUST use links from this list. Do NOT invent slugs. Do NOT use external URLs.\n"
     else:
         # Fresh bootstrap: no pages exist yet. Generate plausible sibling slugs from the titles pool.
         sibling_slugs = _generate_sibling_link_hints(TITLES_POOL_PATH, limit=20)
         if sibling_slugs:
-            page_prompt = page_prompt + f"\n\n=== AVAILABLE INTERNAL LINKS (use at least 3 from this list) ===\n{sibling_slugs}\n\nYou MUST use links from this list. Do NOT invent slugs. Do NOT use external URLs.\n"
+            page_prompt = page_prompt + f"\n\n=== AVAILABLE INTERNAL LINKS (use at least 6 from this list) ===\n{sibling_slugs}\n\nYou MUST use links from this list. Do NOT invent slugs. Do NOT use external URLs.\n"
 
     os.makedirs(CONTENT_ROOT, exist_ok=True)
     contract_hash = compute_contract_hash(site_cfg_path)

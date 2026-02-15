@@ -368,7 +368,7 @@ def validate_page(md_path: Path, cfg: dict) -> Tuple[bool, List[str], int, int]:
     else:
         scored_pass += 1
 
-    # 6) Internal links
+    # 6) Internal links — need 6 total (3 contextual + 3 in related section)
     links = extract_markdown_links(body)
     internal_links = [u for _, u in links if u.startswith("/")]
     external_links = [u for _, u in links if re.match(r"^(https?:)?//", u) or u.startswith("www.")]
@@ -390,7 +390,7 @@ def validate_page(md_path: Path, cfg: dict) -> Tuple[bool, List[str], int, int]:
     else:
         scored_pass += 1
 
-    # Related topics section should carry the internal links
+    # Related topics section should carry internal links (minimum 3)
     def extract_section(md: str, h2_title: str) -> str:
         pat = re.compile(rf"^##\s+{re.escape(h2_title)}\s*$", re.M)
         m = pat.search(md)
@@ -408,9 +408,10 @@ def validate_page(md_path: Path, cfg: dict) -> Tuple[bool, List[str], int, int]:
             if (u or "").startswith("/"):
                 related_links.append((t, u))
 
+    related_min = min(3, min_links)  # At least 3 in related section
     scored_total += 1
-    if len(related_links) < min_links:
-        failures.append(f'Related topics section must include at least {min_links} internal links (found {len(related_links)}).')
+    if len(related_links) < related_min:
+        failures.append(f'Related topics section must include at least {related_min} internal links (found {len(related_links)}).')
     else:
         scored_pass += 1
 

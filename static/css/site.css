@@ -233,3 +233,16 @@ a:hover{text-decoration:underline}
 .about-block { background: var(--card); border-radius: var(--radius); padding: 1.5rem 1.75rem; margin-top: 1.5rem; border: 1px solid var(--border); }
 .about-block p { margin: 0.5rem 0; font-size: 0.97rem; color: var(--muted); }
 .about-block a { color: var(--link); }
+
+/* Concept map page */
+.concept-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.25rem; margin: 1.5rem 0; }
+.concept-hub { background: var(--card); border-radius: var(--radius); padding: 1.25rem 1.5rem; border: 1px solid var(--border); }
+.concept-hub h3 { margin: 0 0 0.5rem; font-size: 1.1rem; }
+.concept-hub h3 a { color: var(--text); text-decoration: none; }
+.concept-hub h3 a:hover { color: var(--link); }
+.hub-desc { font-size: 0.92rem; color: var(--muted); margin: 0 0 0.75rem; }
+.concept-pages { list-style: none; padding: 0; margin: 0; }
+.concept-pages li { padding: 0.2rem 0; font-size: 0.93rem; }
+.concept-pages li a { color: var(--link); }
+.concept-pages .more { color: var(--muted); font-style: italic; }
+.concept-connections { margin-top: 2rem; }
