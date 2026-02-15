@@ -533,8 +533,9 @@ def write_titles_pool(titles: list):
 def build_catalog(titles: list, hubs: list, niche: str) -> dict:
     """Build a structured plan.yaml catalog from flat titles + hubs.
 
-    Assigns each title to a hub based on keyword matching, then orders
-    by hub so generation happens in hub batches (critical for internal linking).
+    Assigns each title to a hub based on keyword matching, generates
+    3-6 tags per title from significant words, then orders by hub
+    so generation happens in hub batches (critical for internal linking).
     """
     hub_ids = [h["id"] for h in hubs if isinstance(h, dict) and h.get("id")]
     hub_labels = {h["id"]: h.get("label", h["id"]) for h in hubs if isinstance(h, dict)}
@@ -554,6 +555,14 @@ def build_catalog(titles: list, hubs: list, niche: str) -> dict:
         words -= {"and", "the", "of", "a", "an", "in", "to", "for", "is", "it", "on", "or"}
         hub_keywords[hid] = words
 
+    # Stopwords for tag extraction
+    STOP = {"a", "an", "the", "of", "in", "to", "for", "is", "it", "on", "or",
+            "and", "be", "are", "was", "were", "can", "do", "does", "how", "what",
+            "why", "when", "where", "which", "who", "that", "this", "with", "from",
+            "by", "at", "as", "but", "not", "no", "if", "so", "than", "more",
+            "about", "into", "one", "you", "your", "its", "has", "have", "had",
+            "been", "being", "will", "would", "could", "should", "may", "might"}
+
     items = []
     for title in titles:
         t = (title or "").strip()
@@ -572,10 +581,17 @@ def build_catalog(titles: list, hubs: list, niche: str) -> dict:
                 best_score = score
                 best_hub = hid
 
+        # Generate tags: significant words from title (3-6 tags)
+        tag_words = [w for w in t.lower().replace("?", "").replace("-", " ").split()
+                     if w not in STOP and len(w) > 2]
+        # Also add the hub as a tag for related-content matching
+        tags = list(dict.fromkeys([best_hub] + tag_words[:5]))  # dedupe, hub first
+
         items.append({
             "title": t,
             "slug": slug,
             "hub": best_hub,
+            "tags": tags,
             "status": "todo",
         })
 

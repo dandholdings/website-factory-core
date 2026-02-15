@@ -875,7 +875,7 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
 
     return True, data
 
-def write_page(slug: str, data: dict, close: str, contract_hash: str, prompt_hash: str) -> Path:
+def write_page(slug: str, data: dict, close: str, contract_hash: str, prompt_hash: str, tags: list = None) -> Path:
     """Create a content page folder and write index.md."""
     page_slug = (slug or "").strip()
     if not page_slug:
@@ -903,6 +903,9 @@ def write_page(slug: str, data: dict, close: str, contract_hash: str, prompt_has
         "contract_hash": contract_hash,
         "prompt_hash": prompt_hash,
     }
+    # Add tags for Hugo related-content matching
+    if tags:
+        front["tags"] = tags
 
     body = (data.get("body_md") or "").rstrip()
     close_txt = (close or "").strip()
@@ -959,6 +962,128 @@ def mark_done(title: str) -> None:
             save_plan(str(PLAN_PATH), plan)
     except Exception:
         pass
+
+
+def _count_pages_per_hub(content_root: Path) -> dict:
+    """Count existing published pages per hub."""
+    counts = {}
+    for md in content_root.glob("*/index.md"):
+        try:
+            raw = md.read_text(encoding="utf-8")
+            fm, _ = read_markdown_frontmatter(raw)
+            hub = str(fm.get("hub", "")).strip()
+            if hub:
+                counts[hub] = counts.get(hub, 0) + 1
+        except Exception:
+            continue
+    return counts
+
+
+def _select_hub_batched_titles(todo_items: list, content_root: Path, hub_min: int = 10) -> list:
+    """Select titles prioritizing hubs that need more pages.
+
+    Strategy: fill each hub to hub_min pages before moving to the next.
+    This ensures every hub has enough siblings for internal linking.
+    """
+    hub_counts = _count_pages_per_hub(content_root)
+
+    # Group todo items by hub
+    by_hub = {}
+    for it in todo_items:
+        hub = str(it.get("hub", "")).strip() or "general"
+        by_hub.setdefault(hub, []).append(it)
+
+    # Prioritize hubs under the minimum, then hubs with the fewest pages
+    ordered_titles = []
+    hub_priority = sorted(by_hub.keys(), key=lambda h: hub_counts.get(h, 0))
+
+    for hub in hub_priority:
+        items = by_hub[hub]
+        ordered_titles.extend([it.get("title", "").strip() for it in items if it.get("title")])
+
+    return ordered_titles
+
+
+def link_injection_pass(content_root: Path, limit: int = 50):
+    """Second pass: ensure every page has at least 3 internal links.
+
+    Reads all existing pages, finds those with fewer than 3 internal links,
+    and injects links into their 'Related topics and deeper reading' section.
+    """
+    # Build catalog of all existing pages
+    all_pages = {}  # slug -> {title, hub, tags, path}
+    for md in content_root.glob("*/index.md"):
+        try:
+            raw = md.read_text(encoding="utf-8")
+            fm, body = read_markdown_frontmatter(raw)
+            slug = fm.get("slug") or md.parent.name
+            all_pages[slug] = {
+                "title": fm.get("title", slug.replace("-", " ").title()),
+                "hub": fm.get("hub", ""),
+                "tags": set(fm.get("tags", [])),
+                "path": md,
+                "body": body,
+                "fm": fm,
+            }
+        except Exception:
+            continue
+
+    if len(all_pages) < 4:
+        # Not enough pages to do meaningful linking
+        return 0
+
+    fixed = 0
+    for slug, info in list(all_pages.items())[:limit]:
+        body = info["body"]
+        existing_links = re.findall(r'\[.*?\]\(/pages/([a-z0-9-]+)/\)', body)
+        if len(existing_links) >= 3:
+            continue
+
+        # Find best link targets: same hub first, then by tag overlap
+        candidates = []
+        for other_slug, other in all_pages.items():
+            if other_slug == slug or other_slug in existing_links:
+                continue
+            score = 0
+            if other["hub"] == info["hub"]:
+                score += 10
+            score += len(info["tags"] & other["tags"])
+            candidates.append((score, other_slug, other["title"]))
+
+        candidates.sort(key=lambda x: -x[0])
+        needed = 3 - len(existing_links)
+        picks = candidates[:needed]
+
+        if not picks:
+            continue
+
+        # Build link block
+        links_md = "\n".join([f"- [{title}](/pages/{s}/)" for _, s, title in picks])
+
+        # Inject into "Related topics and deeper reading" section if it exists
+        related_heading = "## Related topics and deeper reading"
+        if related_heading in body:
+            # Append links after the heading
+            parts = body.split(related_heading, 1)
+            # Find the next ## heading after related section
+            after = parts[1]
+            next_h2 = re.search(r'\n## ', after)
+            if next_h2:
+                insert_pos = next_h2.start()
+                new_after = after[:insert_pos].rstrip() + "\n\n" + links_md + "\n" + after[insert_pos:]
+            else:
+                new_after = after.rstrip() + "\n\n" + links_md + "\n"
+            body = parts[0] + related_heading + new_after
+        else:
+            # Append at the very end
+            body = body.rstrip() + f"\n\n{related_heading}\n\n{links_md}\n"
+
+        # Write back
+        md_text = write_markdown_with_frontmatter(info["fm"], body)
+        info["path"].write_text(md_text, encoding="utf-8")
+        fixed += 1
+
+    return fixed
 
 
 def main():
@@ -1050,8 +1175,8 @@ def main():
 
     titles = []
     if todo_items:
-        # Plan items are already ordered by hub (from bootstrap catalog)
-        titles = [it.get("title", "").strip() for it in todo_items if it.get("title")]
+        # Hub-batched selection: prioritize hubs that need more pages
+        titles = _select_hub_batched_titles(todo_items, CONTENT_ROOT, hub_min=10)
     else:
         titles = load_titles()
         random.shuffle(titles)
@@ -1118,7 +1243,8 @@ def main():
             continue
 
         close = choose_close(data, cfg)
-        write_page(slug=slug, data=data, close=close, contract_hash=contract_hash, prompt_hash=prompt_hash)
+        plan_tags = plan_item.get("tags", []) if isinstance(plan_item, dict) else []
+        write_page(slug=slug, data=data, close=close, contract_hash=contract_hash, prompt_hash=prompt_hash, tags=plan_tags)
 
         if isinstance(plan_item, dict):
             plan_item["slug"] = slug
@@ -1137,6 +1263,12 @@ def main():
 
     if todo_items:
         save_plan(str(PLAN_PATH), plan)
+
+    # Two-pass linking: fix internal links on all pages after generation batch
+    if produced > 0:
+        fixed = link_injection_pass(CONTENT_ROOT)
+        if fixed:
+            print(f"\n[link-pass] Injected internal links into {fixed} pages")
 
     duration = int(time.time() - START_TIME)
     print("\n===== FACTORY SUMMARY =====")
