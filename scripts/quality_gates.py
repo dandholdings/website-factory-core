@@ -257,9 +257,10 @@ DEFAULT_NO_GUARANTEES = [
 ]
 
 DEFAULT_NO_FIRST_PERSON = [
-    # FIX: Tighter pattern — the old one matched "I" inside words and URLs.
-    # Only match standalone first-person pronouns.
-    r"(?<![/\w])\b(I|I'm|I've|my|mine|me|we|we're|we've|our|ours|us)\b(?![/\w])",
+    # Must match generate_pages pre-write validation exactly.
+    # "our", "ours", "us" are acceptable in informational writing
+    # (e.g. "around us", "shape our understanding") — only flag authorial voice.
+    r"(?<![/\w])\b(I|I'm|I've|my|mine|me|we|we're|we've)\b(?![/\w])",
 ]
 
 DEFAULT_NO_CALLS_TO_ACTION = [
