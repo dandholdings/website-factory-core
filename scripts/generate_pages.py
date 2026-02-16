@@ -1032,13 +1032,22 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
     contextual_links = re.findall(r'\[.*?\]\(/pages/[a-z0-9-]+/\)', body_before_related)
     related_links = re.findall(r'\[.*?\]\(/pages/[a-z0-9-]+/\)', related_section_text)
 
-    if len(contextual_links) < 3:
-        print(f"  Too few contextual (in-body) links: {len(contextual_links)} (need 3+)")
-        return False, {}
+    # Stage-aware gating: only enforce strict minimums when candidate pool is sufficient
+    existing_page_count = len(list(Path("content/pages").glob("*/index.md"))) if Path("content/pages").exists() else 0
+    strict_linking = existing_page_count >= 8  # Early sites get a pass
 
-    if len(related_links) < 3:
-        print(f"  Too few related section links: {len(related_links)} (need 3+)")
-        return False, {}
+    if strict_linking:
+        if len(contextual_links) < 3:
+            print(f"  Too few contextual (in-body) links: {len(contextual_links)} (need 3+)")
+            return False, {}
+        if len(related_links) < 3:
+            print(f"  Too few related section links: {len(related_links)} (need 3+)")
+            return False, {}
+    else:
+        # Relaxed: just need some links total
+        if internal_link_count < 3:
+            print(f"  Too few internal links for early-stage site: {internal_link_count} (need 3+)")
+            return False, {}
 
     # Pre-write validation: payload block exists (exactly one)
     payload_headings = re.findall(

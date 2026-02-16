@@ -1,4 +1,4 @@
-{{/* Related links: deduplicated, no self-links. Related results first, then same-hub fallback. */}}
+{{/* Related links: deduplicated, no self-links, deterministic. Related results first, then same-hub, then cross-hub. */}}
 {{ $limit := default 6 .Site.Params.relatedLimit }}
 {{ $self := .RelPermalink }}
 {{ $seen := dict }}
@@ -14,14 +14,13 @@
   {{ end }}
 {{ end }}
 
-{{/* 2) If too few, supplement with same-hub pages (also deduped) */}}
+{{/* 2) If too few, supplement with same-hub pages (deterministic: sorted by title) */}}
 {{ if and (lt (len $unique) $limit) .Params.hub }}
   {{ $hub := .Params.hub }}
   {{ $sameHub := where site.RegularPages "Params.hub" $hub }}
-  {{ $extra := shuffle $sameHub }}
-  {{ range $extra }}
+  {{ $sorted := sort $sameHub "Title" }}
+  {{ range $sorted }}
     {{ if ge (len $unique) $limit }}
-      {{/* Stop once we hit the limit */}}
     {{ else if and (ne .RelPermalink $self) (not (index $seen .RelPermalink)) }}
       {{ $unique = $unique | append . }}
       {{ $seen = merge $seen (dict .RelPermalink true) }}
@@ -29,10 +28,10 @@
   {{ end }}
 {{ end }}
 
-{{/* 3) If still short, pull from any RegularPages (cross-hub) */}}
+{{/* 3) If still short, pull from any RegularPages (deterministic: sorted by title) */}}
 {{ if lt (len $unique) 3 }}
-  {{ $any := shuffle site.RegularPages }}
-  {{ range $any }}
+  {{ $sorted := sort site.RegularPages "Title" }}
+  {{ range $sorted }}
     {{ if ge (len $unique) $limit }}
     {{ else if and (ne .RelPermalink $self) (not (index $seen .RelPermalink)) }}
       {{ $unique = $unique | append . }}
