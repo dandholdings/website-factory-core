@@ -730,95 +730,128 @@ def main(site_slug: str = "", force_reset: bool = False):
 
     existing = load_yaml(SITE_PATH)
 
-    system = (
-        "You are a careful site-bootstrapper for an evergreen informational website.\n"
-        "Hard rules:\n"
-        "- No dates/years or time-sensitive words (recent/currently/this year/today/now).\n"
-        "- No prices/cost claims, no statistics, no 'studies show', no numbers-as-facts.\n"
-        "- No medical/legal/financial advice. No guarantees. No first-person.\n"
-        "- Output a single valid JSON object only. No markdown fences. No extra text.\n"
-    )
+    preserved_hubs = None
+    if isinstance(existing, dict):
+        preserved_hubs = (existing.get('taxonomy', {}) or {}).get('hubs')
+    preserve_taxonomy = bool(preserved_hubs) and not force_reset
 
-    # ── Phase 1: Site identity + hubs (small payload, reliable) ──
-    phase1_user = {
-        "task": "Create site identity and topic taxonomy for an evergreen informational website.",
-        "inputs": {
-            "niche": NICHE,
-            "tone": TONE or "neutral, calm, beginner-friendly",
-        },
-        "allowed_theme_packs": THEME_PACKS,
-        "required_json": {
-            "site_title": "string (2-4 words, no punctuation)",
-            "brand": "string (same as title or shorter)",
-            "tagline": "string (8-14 words, no hype, no promises)",
-            "default_meta_description": "string (<= 155 chars, neutral)",
-            "theme_pack": "one of allowed_theme_packs",
-            "taxonomy": {
-                "hubs": [
-                    {"id": "slug-style-id", "label": "Human Label", "description": "1-sentence description"}
-                ]
-            },
-        },
-        "notes": [
-            "Hub constraints: 6-10 hubs total.",
-            "Hub ids must be lowercase slug-style (e.g. 'understanding-basics', 'types-of-spread').",
-            "Each hub should cover a distinct aspect of the niche.",
-        ],
-    }
+    # Only call Phase 1 LLM if we need identity fields or we are generating taxonomy.
+    identity_missing = True
+    if isinstance(existing, dict):
+        site_sec = existing.get('site', {}) or {}
+        theme_sec = existing.get('theme', {}) or {}
+        identity_missing = not all([
+            bool(site_sec.get('title')),
+            bool(site_sec.get('brand')),
+            bool(site_sec.get('tagline')),
+            bool(site_sec.get('default_meta_description')),
+            bool(theme_sec.get('pack')),
+        ])
 
-    print("[bootstrap] Phase 1: Site identity + taxonomy...")
-    try:
-        phase1 = kimi_json(
-            system=system,
-            user=json.dumps(phase1_user, ensure_ascii=False),
-            temperature=TEMPERATURE,
-            max_tokens=2048,
+
+    phase1 = {}
+    if (not preserve_taxonomy) or identity_missing:
+        system = (
+            "You are a careful site-bootstrapper for an evergreen informational website.\n"
+            "Hard rules:\n"
+            "- No dates/years or time-sensitive words (recent/currently/this year/today/now).\n"
+            "- No prices/cost claims, no statistics, no 'studies show', no numbers-as-facts.\n"
+            "- No medical/legal/financial advice. No guarantees. No first-person.\n"
+            "- Output a single valid JSON object only. No markdown fences. No extra text.\n"
         )
-    except Exception as e:
-        print(f"[bootstrap] Phase 1 failed ({type(e).__name__}: {e}). Using deterministic fallback.")
-        phase1 = _deterministic_bootstrap_fallback(NICHE, TITLE_COUNT)
 
-    theme_pack = phase1.get("theme_pack")
+        # ── Phase 1: Site identity + hubs (small payload, reliable) ──
+        phase1_user = {
+            "task": "Create site identity and topic taxonomy for an evergreen informational website.",
+            "inputs": {
+                "niche": NICHE,
+                "tone": TONE or "neutral, calm, beginner-friendly",
+            },
+            "allowed_theme_packs": THEME_PACKS,
+            "required_json": {
+                "site_title": "string (2-4 words, no punctuation)",
+                "brand": "string (same as title or shorter)",
+                "tagline": "string (8-14 words, no hype, no promises)",
+                "default_meta_description": "string (<= 155 chars, neutral)",
+                "theme_pack": "one of allowed_theme_packs",
+                "taxonomy": {
+                    "hubs": [
+                        {"id": "slug-style-id", "label": "Human Label", "description": "1-sentence description"}
+                    ]
+                },
+            },
+            "notes": [
+                "Hub constraints: 6-10 hubs total.",
+                "Hub ids must be lowercase slug-style (e.g. 'understanding-basics', 'types-of-spread').",
+                "Each hub should cover a distinct aspect of the niche.",
+            ],
+        }
+
+        print("[bootstrap] Phase 1: Site identity + taxonomy...")
+        try:
+            phase1 = kimi_json(
+                system=system,
+                user=json.dumps(phase1_user, ensure_ascii=False),
+                temperature=TEMPERATURE,
+                max_tokens=2048,
+            )
+        except Exception as e:
+            print(f"[bootstrap] Phase 1 failed ({type(e).__name__}: {e}). Using deterministic fallback.")
+            phase1 = _deterministic_bootstrap_fallback(NICHE, TITLE_COUNT)
+    else:
+        print("[bootstrap] Phase 1: Skipped taxonomy/identity generation (existing taxonomy + identity present).")
+
+    # Prefer existing identity fields if present (do not overwrite on reruns)
+    existing_site = (existing.get("site", {}) or {}) if isinstance(existing, dict) else {}
+    existing_theme = (existing.get("theme", {}) or {}) if isinstance(existing, dict) else {}
+
+    theme_pack = (existing_theme.get("pack") or "").strip() if preserve_taxonomy else ""
+    if not theme_pack:
+        theme_pack = (phase1.get("theme_pack") or "").strip()
     if theme_pack not in THEME_PACKS:
         theme_pack = "modern-sans"
 
-    site_title = (phase1.get("site_title") or "Evergreen Site").strip()
-    brand = (phase1.get("brand") or site_title).strip()
-    tagline = (phase1.get("tagline") or "Calm, practical explanations — not advice.").strip()
-    meta = (phase1.get("default_meta_description") or tagline).strip()
+    site_title = (existing_site.get("title") or phase1.get("site_title") or "Evergreen Site").strip()
+    brand = (existing_site.get("brand") or phase1.get("brand") or site_title).strip()
+    tagline = (existing_site.get("tagline") or phase1.get("tagline") or "Calm, practical explanations — not advice.").strip()
+    meta = (existing_site.get("default_meta_description") or phase1.get("default_meta_description") or tagline).strip()
 
-    base_url = (existing.get("site", {}) or {}).get("base_url") if isinstance(existing, dict) else None
+    base_url = (existing_site.get("base_url") or "").strip()
     if not base_url:
         base_url = (os.getenv("BOOTSTRAP_BASE_URL") or "https://YOUR-SITE.pages.dev/").strip()
 
-    # Sanitize hubs from taxonomy.hubs (new) or top-level hubs (old/fallback)
-    raw_hubs = None
-    taxonomy = phase1.get("taxonomy")
-    if isinstance(taxonomy, dict):
-        raw_hubs = taxonomy.get("hubs")
-    if not raw_hubs:
-        raw_hubs = phase1.get("hubs")
-    hubs = None
-    if isinstance(raw_hubs, list) and raw_hubs:
-        # Validate each hub is a dict with id and label
-        valid_hubs = []
-        for h in raw_hubs:
-            if isinstance(h, dict) and h.get("id") and h.get("label"):
-                valid_hubs.append({"id": str(h["id"]).strip(), "label": str(h["label"]).strip()})
-        if len(valid_hubs) >= 3:
-            hubs = valid_hubs
+    # Use existing taxonomy if present unless force_reset was requested
+    if preserve_taxonomy and isinstance(preserved_hubs, list) and preserved_hubs:
+        hubs = preserved_hubs
+    else:
+        # Sanitize hubs from taxonomy.hubs (new) or top-level hubs (old/fallback)
+        raw_hubs = None
+        taxonomy = phase1.get("taxonomy")
+        if isinstance(taxonomy, dict):
+            raw_hubs = taxonomy.get("hubs")
+        if not raw_hubs:
+            raw_hubs = phase1.get("hubs")
+        hubs = None
+        if isinstance(raw_hubs, list) and raw_hubs:
+            # Validate each hub is a dict with id and label
+            valid_hubs = []
+            for h in raw_hubs:
+                if isinstance(h, dict) and h.get("id") and h.get("label"):
+                    valid_hubs.append({"id": str(h["id"]).strip(), "label": str(h["label"]).strip()})
+            if len(valid_hubs) >= 3:
+                hubs = valid_hubs
 
-    if not hubs:
-        hubs = (existing.get("taxonomy", {}) or {}).get("hubs") if isinstance(existing, dict) else None
+        if not hubs:
+            hubs = (existing.get("taxonomy", {}) or {}).get("hubs") if isinstance(existing, dict) else None
 
-    if not hubs or not isinstance(hubs, list) or len(hubs) < 3:
-        hubs = [
-            {"id": "basics", "label": "Basics"},
-            {"id": "how-it-works", "label": "How It Works"},
-            {"id": "gear-setup", "label": "Gear & Setup"},
-            {"id": "troubleshooting", "label": "Troubleshooting"},
-            {"id": "comparisons", "label": "Comparisons"},
-        ]
+        if not hubs or not isinstance(hubs, list) or len(hubs) < 3:
+            hubs = [
+                {"id": "basics", "label": "Basics"},
+                {"id": "how-it-works", "label": "How It Works"},
+                {"id": "gear-setup", "label": "Gear & Setup"},
+                {"id": "troubleshooting", "label": "Troubleshooting"},
+                {"id": "comparisons", "label": "Comparisons"},
+            ]
 
     # ── Phase 2: Generate catalog in batches ──
     # 300 titles at ~20 tokens each won't fit in one call.
@@ -960,16 +993,7 @@ def main(site_slug: str = "", force_reset: bool = False):
         "radius": site_cfg["theme"].get("radius") or "16px",
     })
 
-    # ── Taxonomy: idempotent — preserve existing taxonomy if present ──
-    # If taxonomy was already set (by generate_taxonomy.py or an override), keep it.
-    # Only write LLM-generated hubs if taxonomy is empty/missing.
-    pre_existing_hubs = (existing.get("taxonomy", {}) or {}).get("hubs") if isinstance(existing, dict) else None
-    if pre_existing_hubs and isinstance(pre_existing_hubs, list) and len(pre_existing_hubs) >= 3:
-        print(f"[bootstrap] Taxonomy already has {len(pre_existing_hubs)} hubs — preserving (idempotent).")
-        hubs = pre_existing_hubs
-        site_cfg["taxonomy"]["hubs"] = hubs
-    else:
-        site_cfg["taxonomy"]["hubs"] = hubs
+    site_cfg["taxonomy"]["hubs"] = hubs
 
     gen = site_cfg["generation"]
     gen.setdefault("forbidden_words", [])

@@ -8,9 +8,9 @@ Fills:
   3) Hub FAQs (4-8 Q/A) → data/site.yaml hubs[].faqs
 
 Usage:
-    python scripts/fill_hub_content.py --site-root sites/my-site   # explicit root
-    python scripts/fill_hub_content.py --hub electricity-basics     # fill one hub
-    python scripts/fill_hub_content.py --force                      # overwrite existing
+    python scripts/fill_hub_content.py                       # fill all hubs missing content
+    python scripts/fill_hub_content.py --hub electricity-basics  # fill one hub
+    python scripts/fill_hub_content.py --force                   # overwrite existing
 
 Requires: GEMINI_API_KEY env var
 """
@@ -29,23 +29,11 @@ import yaml
 # --- Config ---
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+SITE_YAML_PATH = Path("data/site.yaml")
+HUBS_CONTENT_ROOT = Path("content/hubs")
 
 REQUEST_TIMEOUT = 120
 MAX_RETRIES = 3
-
-# Fatal error patterns — don't retry these, they won't self-resolve.
-_FATAL_PATTERNS = [
-    "billing",
-    "quota",
-    "permission",
-    "forbidden",
-    "not found",
-    "api key not valid",
-    "region",
-    "location is not supported",
-    "api_key_invalid",
-    "consumer_suspended",
-]
 
 
 def load_yaml(path: Path) -> dict:
@@ -83,39 +71,21 @@ def write_markdown(fm: dict, body: str) -> str:
 
 
 def call_gemini(system: str, user: str) -> dict:
-    """Call Gemini API and return parsed JSON.
-    
-    Uses the same proven pattern as generate_pages.py:
-    - system + user combined into single contents message
-    - responseMimeType for structured JSON output  
-    - thinkingBudget: 0 to disable reasoning overhead
-    """
+    """Call Gemini API and return parsed JSON."""
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY not set")
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
-
-    # Combine system + user into one prompt (same as generate_pages.py)
-    prompt = (
-        system.strip()
-        + "\n\n"
-        + "CRITICAL: Output MUST be a single valid JSON object. No markdown. No code fences. No commentary.\n"
-        + user.strip()
-    )
-
     payload = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "contents": [{"role": "user", "parts": [{"text": user}]}],
+        "systemInstruction": {"parts": [{"text": system}]},
         "generationConfig": {
             "temperature": 0.7,
             "maxOutputTokens": 4096,
             "responseMimeType": "application/json",
-            "thinkingConfig": {"thinkingBudget": 0},
         },
     }
-    headers = {
-        "Content-Type": "application/json",
-        "x-goog-api-key": GEMINI_API_KEY,
-    }
+    headers = {"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"}
 
     for attempt in range(MAX_RETRIES):
         try:
@@ -125,24 +95,7 @@ def call_gemini(system: str, user: str) -> dict:
                 print(f"  API {r.status_code}, retrying in {wait}s...")
                 time.sleep(wait)
                 continue
-            if r.status_code != 200:
-                # Always print the full response body for diagnosis
-                body_text = r.text[:1000]
-                print(f"  HTTP {r.status_code} response body:\n  {body_text}")
-
-                # Fail fast on errors that won't self-resolve
-                lower_body = body_text.lower()
-                for pat in _FATAL_PATTERNS:
-                    if pat in lower_body:
-                        raise RuntimeError(
-                            f"FATAL: Gemini API {r.status_code} — matched '{pat}'. "
-                            f"Check API key, billing, and region settings."
-                        )
-
-                if attempt < MAX_RETRIES - 1:
-                    time.sleep(2)
-                    continue
-                raise RuntimeError(f"Gemini API {r.status_code}: {body_text[:300]}")
+            r.raise_for_status()
 
             data = r.json()
             text = ""
@@ -161,8 +114,6 @@ def call_gemini(system: str, user: str) -> dict:
             if attempt < MAX_RETRIES - 1:
                 time.sleep(2)
             continue
-        except RuntimeError:
-            raise
         except Exception as e:
             print(f"  API error (attempt {attempt+1}): {e}")
             if attempt < MAX_RETRIES - 1:
@@ -222,11 +173,9 @@ Return a JSON object with these fields:
     return call_gemini(system, prompt)
 
 
-def update_hub_index_md(hub_id: str, intro_md: str, force: bool = False, hubs_root: Path = None):
+def update_hub_index_md(hub_id: str, intro_md: str, force: bool = False):
     """Write hub pillar intro to content/hubs/<hub>/_index.md."""
-    if hubs_root is None:
-        hubs_root = Path("content/hubs")
-    idx_path = hubs_root / hub_id / "_index.md"
+    idx_path = HUBS_CONTENT_ROOT / hub_id / "_index.md"
     if not idx_path.exists():
         idx_path.parent.mkdir(parents=True, exist_ok=True)
         idx_path.write_text("---\ntitle: \"\"\ndescription: \"\"\n---\n\n", encoding="utf-8")
@@ -276,35 +225,21 @@ def update_site_yaml_hub(cfg: dict, hub_id: str, cluster_intros: list, faqs: lis
 
 def main():
     parser = argparse.ArgumentParser(description="Fill hub content using Gemini Flash")
-    parser.add_argument("--site-root", default="", help="Path to site root (must contain data/site.yaml)")
+    parser.add_argument("--site-root", default="", help="Site root directory (e.g. sites/<slug>)")
     parser.add_argument("--hub", default="", help="Fill only this hub (by id)")
     parser.add_argument("--force", action="store_true", help="Overwrite existing content")
-    parser.add_argument("--site-yaml", default="data/site.yaml", help="Path to site.yaml (relative to site-root)")
+    parser.add_argument("--site-yaml", default="data/site.yaml", help="Path to site.yaml")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be generated")
     args = parser.parse_args()
 
-    # Resolve site root
     if args.site_root:
-        root = Path(args.site_root).resolve()
-        if not root.is_dir():
-            print(f"ERROR: --site-root '{root}' is not a directory")
-            sys.exit(1)
-        os.chdir(root)
-        print(f"Working directory: {root}")
-
-    # Verify we're in the right place
-    site_yaml_path = Path(args.site_yaml)
-    if not site_yaml_path.exists():
-        print(f"ERROR: {site_yaml_path} not found in {Path.cwd()}")
-        print("  Use --site-root to point to the site directory.")
-        sys.exit(1)
-
-    hubs_content_root = Path("content/hubs")
+        os.chdir(args.site_root)
 
     if not GEMINI_API_KEY:
         print("ERROR: GEMINI_API_KEY not set. Export it first.")
         sys.exit(1)
 
+    site_yaml_path = Path(args.site_yaml)
     cfg = load_yaml(site_yaml_path)
     hubs = (cfg.get("taxonomy", {}) or {}).get("hubs", [])
 
@@ -327,7 +262,7 @@ def main():
         print(f"\n--- Hub: {hub_id} ({hub.get('label', '')}) ---")
 
         # Check if already filled
-        idx_path = hubs_content_root / hub_id / "_index.md"
+        idx_path = HUBS_CONTENT_ROOT / hub_id / "_index.md"
         has_content = False
         if idx_path.exists():
             _, body = read_frontmatter(idx_path.read_text(encoding="utf-8"))
@@ -349,13 +284,6 @@ def main():
         # Generate content
         try:
             result = generate_hub_content(hub, cfg)
-        except RuntimeError as e:
-            # Fatal errors (billing, region) — stop processing all hubs
-            if "FATAL" in str(e):
-                print(f"  [FATAL] {e}")
-                sys.exit(1)
-            print(f"  [ERROR] {e}")
-            continue
         except Exception as e:
             print(f"  [ERROR] {e}")
             continue
@@ -363,7 +291,7 @@ def main():
         # Write hub intro markdown
         intro_md = result.get("hub_intro_markdown", "").strip()
         if intro_md:
-            update_hub_index_md(hub_id, intro_md, force=args.force, hubs_root=hubs_content_root)
+            update_hub_index_md(hub_id, intro_md, force=args.force)
 
         # Update cluster intros in site.yaml
         cluster_intros = result.get("clusters", [])
