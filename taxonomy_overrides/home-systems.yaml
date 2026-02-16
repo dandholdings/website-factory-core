@@ -1,0 +1,150 @@
+# home-systems.yaml — Taxonomy override for Home Systems sites.
+# Use: --override-name home-systems.yaml
+
+taxonomy:
+  hubs:
+  - id: plumbing
+    label: Plumbing Basics
+    description: How water flows through a home, from supply pipes to drains.
+    related_hubs:
+    - water-systems
+    - maintenance-basics
+    - structure
+    clusters:
+    - id: flow-pressure
+      label: Flow & Pressure
+    - id: fixtures-drains
+      label: Fixtures & Drains
+    - id: hot-vs-cold
+      label: Hot vs Cold
+    - id: common-issues-explained
+      label: Common Issues Explained
+    - id: materials-components
+      label: Materials & Components
+  - id: electrical
+    label: Home Electrical Systems
+    description: How home wiring, circuits, and electrical components work together.
+    related_hubs:
+    - safety-systems
+    - maintenance-basics
+    - hvac
+    clusters:
+    - id: circuits-breakers
+      label: Circuits & Breakers
+    - id: power-capacity
+      label: Power Capacity
+    - id: wiring-basics
+      label: Wiring Basics
+    - id: outlets-switches
+      label: Outlets & Switches
+    - id: safety-basics
+      label: Safety Basics
+  - id: hvac
+    label: Heating & Cooling Systems
+    description: How HVAC systems regulate temperature and air quality in a home.
+    related_hubs:
+    - ventilation
+    - electrical
+    - maintenance-basics
+    clusters:
+    - id: system-types
+      label: System Types
+    - id: heat-transfer
+      label: Heat Transfer
+    - id: controls-thermostats
+      label: Controls & Thermostats
+    - id: efficiency-concepts
+      label: Efficiency Concepts
+    - id: comfort-humidity
+      label: Comfort & Humidity
+  - id: ventilation
+    label: Ventilation & Indoor Air
+    description: How fresh air enters, moves through, and exits a home.
+    related_hubs:
+    - hvac
+    - structure
+    - safety-systems
+    clusters:
+    - id: fresh-air-basics
+      label: Fresh Air Basics
+    - id: exhaust-systems
+      label: Exhaust Systems
+    - id: airflow-pressure
+      label: Airflow & Pressure
+    - id: filters-filtration
+      label: Filters & Filtration
+    - id: indoor-pollutants
+      label: Indoor Pollutants
+  - id: structure
+    label: Structural Basics
+    description: 'The physical framework of a home: foundations, walls, and load paths.'
+    related_hubs:
+    - plumbing
+    - ventilation
+    - maintenance-basics
+    clusters:
+    - id: load-bearing-basics
+      label: Load-Bearing Basics
+    - id: materials
+      label: Materials
+    - id: moisture-mold-risk
+      label: Moisture & Mold Risk
+    - id: foundations
+      label: Foundations
+    - id: building-envelope
+      label: Building Envelope
+  - id: water-systems
+    label: Water Supply & Drainage
+    description: How water enters a home, gets distributed, and leaves through drainage.
+    related_hubs:
+    - plumbing
+    - maintenance-basics
+    - safety-systems
+    clusters:
+    - id: supply-lines
+      label: Supply Lines
+    - id: drainage-sewage
+      label: Drainage & Sewage
+    - id: water-quality-basics
+      label: Water Quality Basics
+    - id: hot-water-distribution
+      label: Hot Water Distribution
+    - id: pressure-regulation
+      label: Pressure Regulation
+  - id: safety-systems
+    label: Safety Systems & Detectors
+    description: Smoke alarms, CO detectors, and other safety devices in a home.
+    related_hubs:
+    - electrical
+    - ventilation
+    - maintenance-basics
+    clusters:
+    - id: smoke-alarms
+      label: Smoke Alarms
+    - id: co-alarms
+      label: CO Alarms
+    - id: electrical-safety-devices
+      label: Electrical Safety Devices
+    - id: fire-safety-basics
+      label: Fire Safety Basics
+    - id: emergency-preparedness
+      label: Emergency Preparedness
+  - id: maintenance-basics
+    label: Maintenance Fundamentals
+    description: Understanding how home systems age, what to inspect, and when help
+      is needed.
+    related_hubs:
+    - plumbing
+    - electrical
+    - hvac
+    clusters:
+    - id: inspection-mindset
+      label: Inspection Mindset
+    - id: seasonal-checks
+      label: Seasonal Checks
+    - id: lifespan-expectations
+      label: Lifespan Expectations
+    - id: when-to-call-help
+      label: When to Call Help
+    - id: myths-misconceptions
+      label: Myths & Misconceptions

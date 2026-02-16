@@ -1,0 +1,133 @@
+# energy-efficiency.yaml — Taxonomy override for home energy efficiency sites.
+# Drop into taxonomy_overrides/ in the core repo.
+# Use: --override-name energy-efficiency.yaml
+
+taxonomy:
+  hubs:
+    - id: electricity-basics
+      label: Electricity Fundamentals
+      description: "How electricity works in a home, from power generation to outlets."
+      related_hubs: [energy-costs-billing, appliance-energy, home-envelope]
+      clusters:
+        - id: how-electricity-works
+          label: How Electricity Works
+        - id: power-vs-energy
+          label: Power vs Energy
+        - id: load-profiles
+          label: Load Profiles
+        - id: safety-basics
+          label: Safety Basics
+        - id: measurement-tools
+          label: Measurement Tools
+
+    - id: energy-costs-billing
+      label: Energy Costs & Bills
+      description: "Understanding energy bills, tariffs, and what drives costs up or down."
+      related_hubs: [electricity-basics, appliance-energy, efficiency-upgrades]
+      clusters:
+        - id: billing-components
+          label: Billing Components
+        - id: tariffs-time-of-use
+          label: Tariffs & Time-of-Use
+        - id: bill-estimation
+          label: Bill Estimation
+        - id: cost-drivers
+          label: Cost Drivers
+        - id: planning-budgeting
+          label: Planning & Budgeting
+
+    - id: heating-cooling
+      label: Heating & Cooling Efficiency
+      description: "How heating and cooling systems use energy, and what affects their efficiency."
+      related_hubs: [home-envelope, efficiency-upgrades, electricity-basics]
+      clusters:
+        - id: hvac-fundamentals
+          label: HVAC Fundamentals
+        - id: efficiency-ratings
+          label: Efficiency Ratings
+        - id: thermostat-control
+          label: Thermostat Control
+        - id: heat-loss-gain
+          label: Heat Loss & Gain
+        - id: comfort-vs-cost
+          label: Comfort vs Cost
+
+    - id: appliance-energy
+      label: Appliance Energy Use
+      description: "Which appliances use the most energy and how usage patterns affect consumption."
+      related_hubs: [electricity-basics, energy-costs-billing, efficiency-upgrades]
+      clusters:
+        - id: high-draw-appliances
+          label: High-Draw Appliances
+        - id: always-on-loads
+          label: Always-On Loads
+        - id: usage-patterns
+          label: Usage Patterns
+        - id: efficiency-labels
+          label: Efficiency Labels
+        - id: measuring-appliances
+          label: Measuring Appliances
+
+    - id: home-envelope
+      label: Insulation, Airflow & Sealing
+      description: "How the physical structure of a home affects energy retention and loss."
+      related_hubs: [heating-cooling, efficiency-upgrades, water-heating]
+      clusters:
+        - id: insulation-types
+          label: Insulation Types
+        - id: air-leaks-drafts
+          label: Air Leaks & Drafts
+        - id: windows-doors
+          label: Windows & Doors
+        - id: ventilation-balance
+          label: Ventilation Balance
+        - id: seasonal-effects
+          label: Seasonal Effects
+
+    - id: water-heating
+      label: Water Heating & Hot Water Use
+      description: "How water heating works, what affects efficiency, and common patterns of use."
+      related_hubs: [home-envelope, efficiency-upgrades, energy-costs-billing]
+      clusters:
+        - id: water-heater-types
+          label: Water Heater Types
+        - id: hot-water-demand
+          label: Hot Water Demand
+        - id: heat-loss-pipes
+          label: Heat Loss in Pipes
+        - id: temperature-settings
+          label: Temperature Settings
+        - id: efficiency-options
+          label: Efficiency Options
+
+    - id: efficiency-upgrades
+      label: Efficiency Upgrades & Tradeoffs
+      description: "Common efficiency improvements, their costs, payback periods, and realistic expectations."
+      related_hubs: [appliance-energy, heating-cooling, renewables-home]
+      clusters:
+        - id: upgrade-priorities
+          label: Upgrade Priorities
+        - id: payback-tradeoffs
+          label: Payback & Tradeoffs
+        - id: common-upgrades
+          label: Common Upgrades
+        - id: behavior-vs-hardware
+          label: Behavior vs Hardware
+        - id: mistakes-myths
+          label: Mistakes & Myths
+
+    - id: renewables-home
+      label: Home Renewables & Storage
+      description: "Solar panels, battery storage, and how renewable energy integrates with a home."
+      related_hubs: [efficiency-upgrades, electricity-basics, energy-costs-billing]
+      clusters:
+        - id: solar-basics
+          label: Solar Basics
+        - id: battery-storage
+          label: Battery Storage
+        - id: self-consumption
+          label: Self-Consumption
+        - id: grid-interaction
+          label: Grid Interaction
+        - id: limitations-tradeoffs
+          label: Limitations & Tradeoffs

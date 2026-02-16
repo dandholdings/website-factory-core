@@ -960,7 +960,16 @@ def main(site_slug: str = "", force_reset: bool = False):
         "radius": site_cfg["theme"].get("radius") or "16px",
     })
 
-    site_cfg["taxonomy"]["hubs"] = hubs
+    # ── Taxonomy: idempotent — preserve existing taxonomy if present ──
+    # If taxonomy was already set (by generate_taxonomy.py or an override), keep it.
+    # Only write LLM-generated hubs if taxonomy is empty/missing.
+    pre_existing_hubs = (existing.get("taxonomy", {}) or {}).get("hubs") if isinstance(existing, dict) else None
+    if pre_existing_hubs and isinstance(pre_existing_hubs, list) and len(pre_existing_hubs) >= 3:
+        print(f"[bootstrap] Taxonomy already has {len(pre_existing_hubs)} hubs — preserving (idempotent).")
+        hubs = pre_existing_hubs
+        site_cfg["taxonomy"]["hubs"] = hubs
+    else:
+        site_cfg["taxonomy"]["hubs"] = hubs
 
     gen = site_cfg["generation"]
     gen.setdefault("forbidden_words", [])

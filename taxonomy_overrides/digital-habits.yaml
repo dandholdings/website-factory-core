@@ -1,0 +1,153 @@
+# digital-habits.yaml — Taxonomy override for Digital Habits sites.
+# Use: --override-name digital-habits.yaml
+
+taxonomy:
+  hubs:
+  - id: attention-focus
+    label: Attention & Focus
+    description: How attention works, what disrupts it, and how focus is sustained
+      or lost.
+    related_hubs:
+    - digital-distraction
+    - workflows-systems
+    - digital-wellbeing
+    clusters:
+    - id: focus-basics
+      label: Focus Basics
+    - id: context-switching
+      label: Context Switching
+    - id: deep-work-mechanics
+      label: Deep Work Mechanics
+    - id: cognitive-load
+      label: Cognitive Load
+    - id: attention-training
+      label: Attention Training
+  - id: digital-distraction
+    label: Distraction & Interruptions
+    description: What causes digital distractions, how they affect focus, and common
+      patterns.
+    related_hubs:
+    - attention-focus
+    - notification-loops
+    - social-platforms
+    clusters:
+    - id: interruptions
+      label: Interruptions
+    - id: multitasking-myths
+      label: Multitasking Myths
+    - id: device-friction
+      label: Device Friction
+    - id: environment-design
+      label: Environment Design
+    - id: workplace-distraction
+      label: Workplace Distraction
+  - id: screen-time
+    label: Screen Time Patterns
+    description: How screen time is measured, what patterns look like, and what the
+      data shows.
+    related_hubs:
+    - digital-wellbeing
+    - sleep-recovery
+    - social-platforms
+    clusters:
+    - id: measurement-tracking
+      label: Measurement & Tracking
+    - id: patterns-triggers
+      label: Patterns & Triggers
+    - id: passive-vs-active-use
+      label: Passive vs Active Use
+    - id: age-context-differences
+      label: Age & Context Differences
+    - id: tradeoffs-balance
+      label: Tradeoffs & Balance
+  - id: notification-loops
+    label: Notifications & Reward Loops
+    description: How notifications are designed, how reward mechanics work, and their
+      effects.
+    related_hubs:
+    - digital-distraction
+    - attention-focus
+    - social-platforms
+    clusters:
+    - id: reward-mechanics
+      label: Reward Mechanics
+    - id: notification-design
+      label: Notification Design
+    - id: alerts-vs-importance
+      label: Alerts vs Importance
+    - id: anxiety-urgency
+      label: Anxiety & Urgency
+    - id: habit-formation
+      label: Habit Formation
+  - id: workflows-systems
+    label: Productivity Systems
+    description: How task management, planning, and workflow systems are structured.
+    related_hubs:
+    - attention-focus
+    - digital-wellbeing
+    - digital-distraction
+    clusters:
+    - id: task-management
+      label: Task Management
+    - id: planning-review
+      label: Planning & Review
+    - id: prioritization
+      label: Prioritization
+    - id: tools-frameworks
+      label: Tools & Frameworks
+    - id: automation-basics
+      label: Automation Basics
+  - id: social-platforms
+    label: Social Media Behavior
+    description: How social platforms shape behavior, consumption patterns, and identity.
+    related_hubs:
+    - notification-loops
+    - digital-distraction
+    - digital-wellbeing
+    clusters:
+    - id: feeds-algorithms
+      label: Feeds & Algorithms
+    - id: comparison-status
+      label: Comparison & Status
+    - id: community-identity
+      label: Community & Identity
+    - id: sharing-validation
+      label: Sharing & Validation
+    - id: content-consumption
+      label: Content Consumption
+  - id: digital-wellbeing
+    label: Digital Wellbeing Concepts
+    description: Broad concepts around living with technology in a sustainable way.
+    related_hubs:
+    - attention-focus
+    - screen-time
+    - sleep-recovery
+    clusters:
+    - id: boundaries
+      label: Boundaries
+    - id: digital-minimalism
+      label: Digital Minimalism
+    - id: values-alignment
+      label: Values Alignment
+    - id: sustainable-habits
+      label: Sustainable Habits
+    - id: misconceptions
+      label: Misconceptions
+  - id: sleep-recovery
+    label: Sleep, Recovery & Technology
+    description: How technology intersects with sleep patterns, rest, and recovery.
+    related_hubs:
+    - digital-wellbeing
+    - screen-time
+    - notification-loops
+    clusters:
+    - id: blue-light-context
+      label: Blue Light in Context
+    - id: bedtime-routines
+      label: Bedtime Routines
+    - id: late-night-scrolling
+      label: Late-Night Scrolling
+    - id: recovery-time
+      label: Recovery Time
+    - id: device-in-bedroom
+      label: Device in Bedroom

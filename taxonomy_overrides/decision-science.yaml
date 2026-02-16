@@ -1,0 +1,150 @@
+# decision-science.yaml — Taxonomy override for Decision Science sites.
+# Use: --override-name decision-science.yaml
+
+taxonomy:
+  hubs:
+  - id: decision-foundations
+    label: Foundations of Decisions
+    description: How decisions form, what shapes them, and the basic mechanics of
+      choosing.
+    related_hubs:
+    - cognitive-biases
+    - judgment-heuristics
+    - habits-self-control
+    clusters:
+    - id: how-decisions-form
+      label: How Decisions Form
+    - id: goals-tradeoffs
+      label: Goals & Tradeoffs
+    - id: emotion-reason
+      label: Emotion & Reason
+    - id: feedback-learning
+      label: Feedback & Learning
+    - id: choice-architecture
+      label: Choice Architecture
+  - id: cognitive-biases
+    label: Cognitive Biases
+    description: Systematic patterns in thinking that affect judgment and decision-making.
+    related_hubs:
+    - decision-foundations
+    - judgment-heuristics
+    - social-influence
+    clusters:
+    - id: biases-of-belief
+      label: Biases of Belief
+    - id: biases-of-memory
+      label: Biases of Memory
+    - id: biases-of-perception
+      label: Biases of Perception
+    - id: biases-of-evaluation
+      label: Biases of Evaluation
+    - id: debiasing-concepts
+      label: Debiasing Concepts
+  - id: risk-uncertainty
+    label: Risk & Uncertainty
+    description: How people perceive and respond to risk, probability, and the unknown.
+    related_hubs:
+    - decision-foundations
+    - cognitive-biases
+    - long-term-thinking
+    clusters:
+    - id: risk-perception
+      label: Risk Perception
+    - id: probability-intuition
+      label: Probability & Intuition
+    - id: loss-aversion
+      label: Loss Aversion
+    - id: uncertainty-tolerance
+      label: Uncertainty Tolerance
+    - id: expected-value-basics
+      label: Expected Value Basics
+  - id: judgment-heuristics
+    label: Heuristics & Shortcuts
+    description: Mental shortcuts people use to make quick judgments and their effects.
+    related_hubs:
+    - cognitive-biases
+    - decision-foundations
+    - attention-information
+    clusters:
+    - id: availability-representativeness
+      label: Availability & Representativeness
+    - id: anchoring-adjustment
+      label: Anchoring & Adjustment
+    - id: rule-of-thumb-thinking
+      label: Rule-of-Thumb Thinking
+    - id: mental-models
+      label: Mental Models
+    - id: confidence-calibration
+      label: Confidence & Calibration
+  - id: social-influence
+    label: Social Influence & Group Thinking
+    description: How other people, groups, and social norms shape individual decisions.
+    related_hubs:
+    - cognitive-biases
+    - attention-information
+    - habits-self-control
+    clusters:
+    - id: conformity-norms
+      label: Conformity & Norms
+    - id: authority-influence
+      label: Authority & Influence
+    - id: social-proof
+      label: Social Proof
+    - id: group-polarization
+      label: Group Polarization
+    - id: identity-beliefs
+      label: Identity & Beliefs
+  - id: attention-information
+    label: Attention & Information Overload
+    description: How limited attention and information volume affect decision quality.
+    related_hubs:
+    - judgment-heuristics
+    - social-influence
+    - long-term-thinking
+    clusters:
+    - id: limited-attention
+      label: Limited Attention
+    - id: information-overload
+      label: Information Overload
+    - id: signal-vs-noise
+      label: Signal vs Noise
+    - id: misinformation-patterns
+      label: Misinformation Patterns
+    - id: media-diets
+      label: Media Diets
+  - id: habits-self-control
+    label: Habits, Motivation & Self-Control
+    description: How habits form, what drives motivation, and how self-control works.
+    related_hubs:
+    - decision-foundations
+    - long-term-thinking
+    - social-influence
+    clusters:
+    - id: habit-loops
+      label: Habit Loops
+    - id: motivation-reward
+      label: Motivation & Reward
+    - id: procrastination-patterns
+      label: Procrastination Patterns
+    - id: impulses-willpower
+      label: Impulses & Willpower
+    - id: environment-design
+      label: Environment Design
+  - id: long-term-thinking
+    label: Long-Term vs Short-Term Thinking
+    description: How time horizons, planning, and future thinking affect decisions.
+    related_hubs:
+    - risk-uncertainty
+    - habits-self-control
+    - decision-foundations
+    clusters:
+    - id: time-discounting
+      label: Time Discounting
+    - id: planning-fallacy
+      label: Planning Fallacy
+    - id: goal-setting
+      label: Goal Setting
+    - id: regret-anticipation
+      label: Regret & Anticipation
+    - id: systems-vs-goals
+      label: Systems vs Goals
