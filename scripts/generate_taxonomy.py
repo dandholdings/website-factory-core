@@ -107,13 +107,23 @@ def build_receipt(family_id: str, blueprint: dict, niche: str, hub_count: int) -
 
 def main():
     parser = argparse.ArgumentParser(description="Generate taxonomy from blueprint")
+    parser.add_argument("--site-root", default="", help="Path to site root (must contain data/ dir)")
     parser.add_argument("--niche", required=True, help="Niche description (e.g. 'home energy efficiency')")
     parser.add_argument("--family", default="", help="Explicit family ID (skip auto-detection)")
     parser.add_argument("--hub-count", type=int, default=8, help="Number of hubs to use (default 8)")
     parser.add_argument("--clusters-per-hub", type=int, default=5, help="Clusters per hub (default 5)")
-    parser.add_argument("--site-yaml", default="data/site.yaml", help="Path to site.yaml")
+    parser.add_argument("--site-yaml", default="data/site.yaml", help="Path to site.yaml (relative to site-root)")
     parser.add_argument("--force", action="store_true", help="Overwrite existing taxonomy")
     args = parser.parse_args()
+
+    # Resolve site root
+    if args.site_root:
+        root = Path(args.site_root).resolve()
+        if not root.is_dir():
+            print(f"ERROR: --site-root '{root}' is not a directory")
+            sys.exit(1)
+        os.chdir(root)
+        print(f"Working directory: {root}")
 
     site_yaml_path = Path(args.site_yaml)
     cfg = load_yaml(site_yaml_path)
