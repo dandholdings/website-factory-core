@@ -643,9 +643,19 @@ def build_prompts(cfg: dict):
     generation = cfg.get("generation", {}) if isinstance(cfg, dict) else {}
 
     brand = site.get("brand") or site.get("title") or "Evergreen Site"
-    hubs = [h.get("id") for h in (taxonomy.get("hubs") or []) if isinstance(h, dict) and h.get("id")] or [
+    hub_defs = taxonomy.get("hubs") or []
+    hubs = [h.get("id") for h in hub_defs if isinstance(h, dict) and h.get("id")] or [
         "basics", "how-it-works", "contexts", "misconceptions", "related-concepts"
     ]
+
+    # Build hub → clusters lookup for cluster-aware generation
+    hub_clusters = {}
+    for h in hub_defs:
+        if isinstance(h, dict) and h.get("id") and h.get("clusters"):
+            cluster_ids = [c.get("id") for c in h["clusters"] if isinstance(c, dict) and c.get("id")]
+            if cluster_ids:
+                hub_clusters[h["id"]] = cluster_ids
+
     page_types = generation.get("page_types") or [
         "is-it-normal", "checklist", "red-flags", "myth-vs-reality", "explainer"
     ]
@@ -690,12 +700,24 @@ Forbidden words/phrases: {forbidden_str}.
 Return a single valid JSON object only. No markdown fences. No extra text before or after the JSON.
 """
 
+    # Build cluster instruction block
+    cluster_instruction = ""
+    if hub_clusters:
+        cluster_lines = []
+        for hid, cids in hub_clusters.items():
+            cluster_lines.append(f"  Hub \"{hid}\" clusters: {' | '.join(cids)}")
+        cluster_instruction = f"""
+cluster (REQUIRED if hub has clusters defined below, else omit this field):
+{chr(10).join(cluster_lines)}
+If your chosen hub has clusters, you MUST set cluster to one of its allowed values."""
+
     page_prompt = f"""Return ONLY a JSON object with these keys:
 title
 summary (one sentence reassurance; also used as meta description)
 description (<= 160 chars, no quotes)
 hub (one of: { " | ".join(hubs) })
 page_type (one of: { " | ".join(page_types) })
+{cluster_instruction}
 closing_reassurance (one short, gentle line; NOT advice)
 body_md (markdown only; must include the exact H2 headings below)
 
@@ -756,7 +778,7 @@ TONE & STRUCTURE:
 - Do not include the closing reassurance inside body_md; put it in closing_reassurance.
 {closing_hint}
 """
-    return system, page_prompt
+    return system, page_prompt, hub_clusters
 
 def choose_close(data: dict, cfg: dict) -> str:
     close = (data.get("closing_reassurance") or "").strip()
@@ -1166,6 +1188,10 @@ def write_page(slug: str, data: dict, close: str, contract_hash: str, prompt_has
         "contract_hash": contract_hash,
         "prompt_hash": prompt_hash,
     }
+    # Add cluster if present (for hub pillar page grouping)
+    cluster = (data.get("cluster") or "").strip()
+    if cluster:
+        front["cluster"] = cluster
     # Add tags for Hugo related-content matching
     if tags:
         front["tags"] = tags
@@ -1352,7 +1378,7 @@ def link_injection_pass(content_root: Path, limit: int = 50):
 def main():
     site_cfg_path = resolve_site_config_path()
     cfg = load_yaml(site_cfg_path)
-    system, page_prompt = build_prompts(cfg)
+    system, page_prompt, hub_clusters = build_prompts(cfg)
 
     # FIX: PERF_MAX_PAGES from empty workflow input will be empty string, which crashes int().
     _perf_raw = (os.getenv("PERF_MAX_PAGES") or "").strip()

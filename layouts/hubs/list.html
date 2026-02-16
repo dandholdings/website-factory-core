@@ -1,50 +1,94 @@
 {{ define "main" }}
 {{ $hub := .File.Dir | strings.TrimSuffix "/" | path.Base }}
-{{ $allPages := where site.RegularPages "Params.hub" $hub }}
+{{ $rawPages := where site.RegularPages "Params.hub" $hub }}
+{{ $allPages := sort $rawPages "Title" }}
+{{ $allPages = sort $allPages "Date" }}
+{{ $allPages = sort $allPages "Weight" }}
 
-<section class="list hub-landing">
-  <header class="page-header">
+{{/* Load hub config */}}
+{{ $allHubs := slice }}
+{{ with site.Data.site }}{{ with .taxonomy }}{{ with .hubs }}{{ $allHubs = . }}{{ end }}{{ end }}{{ end }}
+{{ $hubCfg := dict }}
+{{ range $allHubs }}
+  {{ if eq (index . "id") $hub }}
+    {{ $hubCfg = . }}
+  {{ end }}
+{{ end }}
+{{ $clusters := index $hubCfg "clusters" | default slice }}
+{{ $faqs := index $hubCfg "faqs" | default slice }}
+{{ $fmFaqs := .Params.faqs | default slice }}
+{{ if and (eq (len $faqs) 0) (gt (len $fmFaqs) 0) }}
+  {{ $faqs = $fmFaqs }}
+{{ end }}
+
+<article class="hub-pillar">
+  <header class="hub-hero">
     <h1 class="page-title">{{ .Title }}</h1>
-    {{ with .Params.description }}<p class="muted">{{ . }}</p>{{ end }}
+    {{ with .Params.description }}<p class="hub-positioning">{{ . }}</p>{{ end }}
   </header>
 
-  {{/* Hub intro from _index.md content */}}
   {{ with .Content }}
-    <div class="hub-intro content">{{ . }}</div>
+    <section class="hub-pillar-intro content">{{ . }}</section>
   {{ end }}
 
   {{ partial "ad-slot.html" (dict "ctx" . "slot" "hub_top") }}
 
-  {{/* Start here: first 3 pages */}}
-  {{ if ge (len $allPages) 3 }}
-  <div class="hub-section">
-    <h2>Start here</h2>
-    <div class="cards">
-      {{ range first 3 $allPages }}
-        <a class="card card--start" href="{{ .RelPermalink }}">
-          <div class="card-title">{{ .Title }}</div>
-          {{ with .Params.summary }}<div class="card-summary">{{ . }}</div>{{ end }}
-        </a>
+  {{ if gt (len $clusters) 0 }}
+    {{ $clustered := dict }}
+    {{ $unclustered := slice }}
+    {{ range $allPages }}
+      {{ $pc := .Params.cluster | default "" }}
+      {{ if $pc }}
+        {{ $existing := index $clustered $pc }}
+        {{ if $existing }}
+          {{ $clustered = merge $clustered (dict $pc ($existing | append .)) }}
+        {{ else }}
+          {{ $clustered = merge $clustered (dict $pc (slice .)) }}
+        {{ end }}
+      {{ else }}
+        {{ $unclustered = $unclustered | append . }}
       {{ end }}
-    </div>
-  </div>
+    {{ end }}
+    {{ range $clusters }}
+      {{ $cid := .id }}
+      {{ $cPages := index $clustered $cid | default slice }}
+      {{ if gt (len $cPages) 0 }}
+      <section class="hub-cluster">
+        <h2>{{ .label }}</h2>
+        {{ with .intro }}<p class="cluster-intro">{{ . }}</p>{{ end }}
+        <div class="cards">{{ range $cPages }}<a class="card" href="{{ .RelPermalink }}"><div class="card-title">{{ .Title }}</div>{{ with .Params.summary }}<div class="card-summary">{{ . }}</div>{{ end }}</a>{{ end }}</div>
+      </section>
+      {{ end }}
+    {{ end }}
+    {{ if gt (len $unclustered) 0 }}
+    <section class="hub-cluster hub-cluster--more">
+      <h2>More in this topic</h2>
+      <div class="cards">{{ range $unclustered }}<a class="card" href="{{ .RelPermalink }}"><div class="card-title">{{ .Title }}</div>{{ with .Params.summary }}<div class="card-summary">{{ . }}</div>{{ end }}</a>{{ end }}</div>
+    </section>
+    {{ end }}
+  {{ else }}
+    <section class="hub-cluster">
+      <h2>All guides</h2>
+      <div class="cards">{{ range $allPages }}<a class="card" href="{{ .RelPermalink }}"><div class="card-title">{{ .Title }}</div>{{ with .Params.summary }}<div class="card-summary">{{ . }}</div>{{ end }}</a>{{ end }}</div>
+    </section>
   {{ end }}
 
-  {{/* All pages */}}
-  <div class="hub-section">
-    <h2>All guides</h2>
-    <div class="cards">
-      {{ range $allPages }}
-        <a class="card" href="{{ .RelPermalink }}">
-          <div class="card-title">{{ .Title }}</div>
-          {{ with .Params.summary }}<div class="card-summary">{{ . }}</div>{{ end }}
-        </a>
-      {{ end }}
-    </div>
-  </div>
+  {{ if ge (len $allPages) 3 }}
+  <section class="hub-start-here">
+    <h2>Start here</h2>
+    <div class="cards">{{ range first 3 $allPages }}<a class="card card--start" href="{{ .RelPermalink }}"><div class="card-title">{{ .Title }}</div>{{ with .Params.summary }}<div class="card-summary">{{ . }}</div>{{ end }}</a>{{ end }}</div>
+  </section>
+  {{ end }}
+
+  {{ if gt (len $faqs) 0 }}
+  <section class="hub-faq">
+    <h2>Frequently asked questions</h2>
+    {{ range $faqs }}<details class="faq-item"><summary>{{ .q }}</summary><div class="faq-answer"><p>{{ .a }}</p></div></details>{{ end }}
+  </section>
+  {{ end }}
 
   {{ partial "ad-slot.html" (dict "ctx" . "slot" "hub_bottom") }}
-</section>
+</article>
 {{ end }}
 
 {{ define "sidebar" }}

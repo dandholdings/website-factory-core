@@ -415,8 +415,56 @@ p{margin:0 0 1em}
 .concept-hub h3 a{color:var(--text);text-decoration:none}
 .concept-hub h3 a:hover{color:var(--primary)}
 .hub-desc{font-size:.88rem;color:var(--muted);margin:0 0 0.75rem}
+.hub-count{font-size:.85rem;color:var(--muted);margin:0.5rem 0 0}
 .concept-pages{list-style:none;padding:0;margin:0}
 .concept-pages li{padding:0.2rem 0;font-size:.88rem}
 .concept-pages li a{color:var(--link)}
 .concept-pages .more{color:var(--muted);font-style:italic}
-.concept-connections{margin-top:2rem}
+.concept-connections,.map-connections{margin-top:2rem}
+.map-starters{margin-bottom:2rem}
+
+/* ===== HUB PILLAR LANDING ===== */
+.hub-pillar{max-width:var(--content-max, 74ch);margin:0 auto}
+.hub-hero{margin-bottom:1.5rem}
+.hub-positioning{font-size:1.05rem;color:var(--muted);margin-top:0.5rem;line-height:1.6}
+.hub-pillar-intro{margin-bottom:2rem;line-height:1.7}
+
+/* Cluster sections */
+.hub-cluster{margin-bottom:2.5rem;padding-bottom:1.5rem;border-bottom:1px solid var(--border)}
+.hub-cluster:last-of-type{border-bottom:none}
+.hub-cluster h2{font-size:1.15rem;font-weight:600;margin-bottom:0.5rem}
+.cluster-intro{font-size:.9rem;color:var(--muted);margin-bottom:1rem;line-height:1.6}
+.section-intro{font-size:.9rem;color:var(--muted);margin-bottom:1rem;line-height:1.6}
+
+/* Start here */
+.hub-start-here{margin:2rem 0;padding:1.5rem;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border)}
+.hub-start-here h2{margin-top:0;font-size:1.1rem}
+.card--start{border-left:3px solid var(--primary)}
+
+/* Related areas (cross-hub bridge) */
+.hub-related-areas{margin:2rem 0}
+.related-hubs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1rem;margin-top:1rem}
+.related-hub-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.25rem}
+.related-hub-card h3{margin:0 0 0.5rem;font-size:1rem;font-weight:600}
+.related-hub-card h3 a{color:var(--text);text-decoration:none}
+.related-hub-card h3 a:hover{color:var(--primary)}
+.related-hub-card ul{list-style:none;padding:0;margin:0}
+.related-hub-card li{padding:0.15rem 0;font-size:.88rem}
+.related-hub-card li a{color:var(--link)}
+
+/* FAQ section */
+.hub-faq{margin:2rem 0}
+.hub-faq h2{margin-bottom:1rem}
+.faq-item{border:1px solid var(--border);border-radius:var(--radius);margin-bottom:0.5rem;overflow:hidden}
+.faq-item summary{padding:0.85rem 1.1rem;font-weight:600;font-size:.95rem;cursor:pointer;list-style:none;display:flex;align-items:center;gap:0.5rem;background:var(--surface)}
+.faq-item summary::before{content:"＋";font-size:.85rem;color:var(--muted);flex-shrink:0;width:1.2em;text-align:center}
+.faq-item[open] summary::before{content:"－"}
+.faq-item summary::-webkit-details-marker{display:none}
+.faq-answer{padding:0.75rem 1.1rem 1rem;font-size:.9rem;line-height:1.65;color:var(--text)}
+.faq-answer p{margin:0}
+
+/* Related reading (hub-internal) */
+.hub-related-reading{margin:2rem 0;padding-top:1rem;border-top:1px solid var(--border)}
+.hub-related-reading ul{list-style:none;padding:0;margin:0.5rem 0 0}
+.hub-related-reading li{padding:0.25rem 0;font-size:.9rem}
+.hub-related-reading li a{color:var(--link)}

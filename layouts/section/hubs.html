@@ -2,7 +2,7 @@
 {{ $dir := .File.Dir | strings.TrimSuffix "/" }}
 {{ $leaf := path.Base $dir }}
 
-{{/* Root hubs index: /hubs/ */}}
+{{/* Root hubs index: /hubs/ — unchanged */}}
 {{ if eq $leaf "hubs" }}
   <section class="list">
     <header class="page-header">
@@ -29,28 +29,153 @@
   </section>
 
 {{ else }}
-  {{/* Hub page: /hubs/<id>/ — enhanced with clusters, start-here, grouped links */}}
-  {{ $hub := $leaf }}
-  {{ $allPages := where site.RegularPages "Params.hub" $hub }}
-  {{ $self := .RelPermalink }}
+  {{/* ============================================================
+       HUB PILLAR LANDING PAGE: /hubs/<id>/
+       Gold-standard structure:
+         A) Hero
+         B) Pillar definition / orientation (hub intro)
+         C) Subtopic clusters (semantic grouping)
+         D) Start here (deterministic)
+         E) Related areas (deterministic cross-hub bridge)
+         F) FAQ block
+         G) Related reading (hub-internal, deterministic)
+       ============================================================ */}}
+  {{ $hubId := $leaf }}
 
-  <section class="list hub-landing">
-    <header class="page-header">
-      <h1 class="page-title">{{ .Title }}</h1>
-      {{ with .Params.description }}<p class="muted">{{ . }}</p>{{ end }}
-    </header>
+  {{/* Load hub config from site.Data.site.taxonomy.hubs */}}
+  {{ $allHubs := slice }}
+  {{ with site.Data.site }}{{ with .taxonomy }}{{ with .hubs }}{{ $allHubs = . }}{{ end }}{{ end }}{{ end }}
 
-    {{/* Hub intro */}}
-    {{ with .Content }}
-      <div class="hub-intro content">{{ . }}</div>
+  {{ $hubCfg := dict }}
+  {{ $hubIdx := -1 }}
+  {{ range $i, $h := $allHubs }}
+    {{ if eq (index $h "id") $hubId }}
+      {{ $hubCfg = $h }}
+      {{ $hubIdx = $i }}
     {{ end }}
+  {{ end }}
+
+  {{/* All pages in this hub, sorted deterministically: weight → date → title */}}
+  {{ $rawPages := where site.RegularPages "Params.hub" $hubId }}
+  {{ $allPages := sort $rawPages "Title" }}
+  {{ $allPages = sort $allPages "Date" }}
+  {{ $allPages = sort $allPages "Weight" }}
+
+  {{/* Extract config fields */}}
+  {{ $clusters := index $hubCfg "clusters" | default slice }}
+  {{ $faqs := index $hubCfg "faqs" | default slice }}
+  {{/* Also check frontmatter faqs */}}
+  {{ $fmFaqs := .Params.faqs | default slice }}
+  {{ if and (eq (len $faqs) 0) (gt (len $fmFaqs) 0) }}
+    {{ $faqs = $fmFaqs }}
+  {{ end }}
+  {{ $relatedHubIds := index $hubCfg "related_hubs" | default slice }}
+
+  <article class="hub-pillar">
+
+    {{/* ── A) HERO ── */}}
+    <header class="hub-hero">
+      <h1 class="page-title">{{ .Title }}</h1>
+      {{ with .Params.description }}<p class="hub-positioning">{{ . }}</p>{{ end }}
+    </header>
 
     {{ partial "ad-slot.html" (dict "ctx" . "slot" "hub_top") }}
 
-    {{/* Start here: first 3 pages (oldest = foundational) */}}
+    {{/* ── B) PILLAR DEFINITION / ORIENTATION ── */}}
+    {{ with .Content }}
+      <section class="hub-pillar-intro content">
+        {{ . }}
+      </section>
+    {{ end }}
+
+    {{/* ── C) SUBTOPIC CLUSTERS ── */}}
+    {{ if gt (len $clusters) 0 }}
+      {{/* Cluster mode: group pages by cluster field */}}
+      {{ $clustered := dict }}
+      {{ $unclustered := slice }}
+      {{ range $allPages }}
+        {{ $pc := .Params.cluster | default "" }}
+        {{ if $pc }}
+          {{ $existing := index $clustered $pc }}
+          {{ if $existing }}
+            {{ $clustered = merge $clustered (dict $pc ($existing | append .)) }}
+          {{ else }}
+            {{ $clustered = merge $clustered (dict $pc (slice .)) }}
+          {{ end }}
+        {{ else }}
+          {{ $unclustered = $unclustered | append . }}
+        {{ end }}
+      {{ end }}
+
+      {{ range $clusters }}
+        {{ $cid := .id }}
+        {{ $cPages := index $clustered $cid | default slice }}
+        {{ if gt (len $cPages) 0 }}
+        <section class="hub-cluster">
+          <h2>{{ .label }}</h2>
+          {{ with .intro }}<p class="cluster-intro">{{ . }}</p>{{ end }}
+          <div class="cards">
+            {{ range $cPages }}
+              <a class="card" href="{{ .RelPermalink }}">
+                <div class="card-title">{{ .Title }}</div>
+                {{ with .Params.summary }}<div class="card-summary">{{ . }}</div>{{ end }}
+              </a>
+            {{ end }}
+          </div>
+        </section>
+        {{ end }}
+      {{ end }}
+
+      {{/* Unclustered pages fallback */}}
+      {{ if gt (len $unclustered) 0 }}
+      <section class="hub-cluster hub-cluster--more">
+        <h2>More in this topic</h2>
+        <div class="cards">
+          {{ range $unclustered }}
+            <a class="card" href="{{ .RelPermalink }}">
+              <div class="card-title">{{ .Title }}</div>
+              {{ with .Params.summary }}<div class="card-summary">{{ . }}</div>{{ end }}
+            </a>
+          {{ end }}
+        </div>
+      </section>
+      {{ end }}
+
+    {{ else }}
+      {{/* No clusters configured — fallback to page_type grouping */}}
+      {{ $byType := dict }}
+      {{ range $allPages }}
+        {{ $pt := .Params.page_type | default "guide" }}
+        {{ $existing := index $byType $pt }}
+        {{ if $existing }}
+          {{ $byType = merge $byType (dict $pt ($existing | append .)) }}
+        {{ else }}
+          {{ $byType = merge $byType (dict $pt (slice .)) }}
+        {{ end }}
+      {{ end }}
+
+      {{ range $type, $pages := $byType }}
+        {{ if gt (len $pages) 0 }}
+        <section class="hub-cluster">
+          <h2>{{ $type | humanize | title }}</h2>
+          <div class="cards">
+            {{ range $pages }}
+              <a class="card" href="{{ .RelPermalink }}">
+                <div class="card-title">{{ .Title }}</div>
+                {{ with .Params.summary }}<div class="card-summary">{{ . }}</div>{{ end }}
+              </a>
+            {{ end }}
+          </div>
+        </section>
+        {{ end }}
+      {{ end }}
+    {{ end }}
+
+    {{/* ── D) START HERE (deterministic: sorted pages, first 3) ── */}}
     {{ if ge (len $allPages) 3 }}
-    <div class="hub-section">
+    <section class="hub-start-here">
       <h2>Start here</h2>
+      <p class="section-intro">These guides provide a solid foundation for this topic area.</p>
       <div class="cards">
         {{ range first 3 $allPages }}
           <a class="card card--start" href="{{ .RelPermalink }}">
@@ -59,57 +184,91 @@
           </a>
         {{ end }}
       </div>
-    </div>
+    </section>
     {{ end }}
 
-    {{/* Group remaining pages by page_type */}}
-    {{ $seen := dict }}
-    {{ $byType := dict }}
-    {{ range $allPages }}
-      {{ $pt := .Params.page_type | default "guide" }}
-      {{ $existing := index $byType $pt }}
-      {{ if $existing }}
-        {{ $byType = merge $byType (dict $pt ($existing | append .)) }}
-      {{ else }}
-        {{ $byType = merge $byType (dict $pt (slice .)) }}
-      {{ end }}
-    {{ end }}
+    {{ partial "ad-slot.html" (dict "ctx" . "slot" "hub_mid") }}
 
-    {{ range $type, $pages := $byType }}
-      {{ if gt (len $pages) 0 }}
-      <div class="hub-section">
-        <h2>{{ $type | humanize | title }}</h2>
-        <div class="cards">
-          {{ range $pages }}
-            <a class="card" href="{{ .RelPermalink }}">
-              <div class="card-title">{{ .Title }}</div>
-              {{ with .Params.summary }}<div class="card-summary">{{ . }}</div>{{ end }}
-            </a>
+    {{/* ── E) RELATED AREAS (deterministic cross-hub bridge) ── */}}
+    {{ $relatedHubs := slice }}
+    {{ if gt (len $relatedHubIds) 0 }}
+      {{/* Use configured related_hubs */}}
+      {{ range $relatedHubIds }}
+        {{ $rid := . }}
+        {{ range $allHubs }}
+          {{ if eq (index . "id") $rid }}
+            {{ $relatedHubs = $relatedHubs | append . }}
           {{ end }}
-        </div>
-      </div>
+        {{ end }}
+      {{ end }}
+    {{ else if and (ge $hubIdx 0) (gt (len $allHubs) 1) }}
+      {{/* Fallback: pick next 3 hubs in taxonomy order (wrapping around) */}}
+      {{ $total := len $allHubs }}
+      {{ range seq 1 3 }}
+        {{ $idx := mod (add $hubIdx .) $total }}
+        {{ $candidate := index $allHubs $idx }}
+        {{ if ne (index $candidate "id") $hubId }}
+          {{ $relatedHubs = $relatedHubs | append $candidate }}
+        {{ end }}
       {{ end }}
     {{ end }}
 
-    {{/* Cross-hub: suggest 3 pages from adjacent hubs */}}
-    {{ $otherPages := where site.RegularPages "Params.hub" "!=" $hub }}
-    {{ $crossHub := shuffle $otherPages | first 3 }}
-    {{ if gt (len $crossHub) 0 }}
-    <div class="hub-section">
-      <h2>Related topics from other areas</h2>
-      <div class="cards">
-        {{ range $crossHub }}
-          <a class="card" href="{{ .RelPermalink }}">
-            <div class="card-title">{{ .Title }}</div>
-            {{ with .Params.hub }}<div class="card-summary">{{ . | humanize }}</div>{{ end }}
-          </a>
+    {{ if gt (len $relatedHubs) 0 }}
+    <section class="hub-related-areas">
+      <h2>Related areas of life</h2>
+      <p class="section-intro">These topics often overlap with the ideas explored here.</p>
+      <div class="related-hubs-grid">
+        {{ range first 3 $relatedHubs }}
+          {{ $rid := index . "id" }}
+          {{ $rlabel := index . "label" }}
+          {{ $rPages := where site.RegularPages "Params.hub" $rid }}
+          {{/* Deterministic: sort by title, pick first 2 */}}
+          {{ $rSorted := sort $rPages "Title" }}
+          <div class="related-hub-card">
+            <h3><a href="{{ (printf "/hubs/%s/" $rid) | relURL }}">{{ $rlabel }}</a></h3>
+            {{ if gt (len $rSorted) 0 }}
+            <ul>
+              {{ range first 2 $rSorted }}
+                <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>
+              {{ end }}
+            </ul>
+            {{ end }}
+          </div>
         {{ end }}
       </div>
-    </div>
+    </section>
+    {{ end }}
+
+    {{/* ── F) FAQ BLOCK ── */}}
+    {{ if gt (len $faqs) 0 }}
+    <section class="hub-faq">
+      <h2>Frequently asked questions</h2>
+      {{ range $faqs }}
+        <details class="faq-item">
+          <summary>{{ .q }}</summary>
+          <div class="faq-answer"><p>{{ .a }}</p></div>
+        </details>
+      {{ end }}
+    </section>
+    {{ end }}
+
+    {{/* ── G) RELATED READING (hub-internal, deterministic) ── */}}
+    {{ if gt (len $allPages) 3 }}
+    <section class="hub-related-reading">
+      <h2>Further reading</h2>
+      {{/* Skip the first 3 (used in Start Here), take next 6 deterministically */}}
+      {{ $remaining := after 3 $allPages }}
+      <ul>
+        {{ range first 6 $remaining }}
+          <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>
+        {{ end }}
+      </ul>
+    </section>
     {{ end }}
 
     {{ partial "ad-slot.html" (dict "ctx" . "slot" "hub_bottom") }}
-  </section>
+
+  </article>
 {{ end }}
 {{ end }}
 
