@@ -1,0 +1,25 @@
+# Normalise line endings: commit as LF, checkout as OS-native.
+* text=auto eol=lf
+
+# Ensure scripts stay LF everywhere (including Windows checkouts).
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+
+# Binary — don't touch.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
