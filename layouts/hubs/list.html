@@ -1,8 +1,8 @@
 {{ define "main" }}
 {{ $hub := .File.Dir | strings.TrimSuffix "/" | path.Base }}
 {{ $rawPages := where site.RegularPages "Params.hub" $hub }}
+{{/* Sort deterministically: by weight (for pinned ordering), then by title as tiebreaker */}}
 {{ $allPages := sort $rawPages "Title" }}
-{{ $allPages = sort $allPages "Date" }}
 {{ $allPages = sort $allPages "Weight" }}
 
 {{/* Load hub config */}}

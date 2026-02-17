@@ -140,9 +140,17 @@
 {{/* FAQPage schema — only if page has FAQ section */}}
 {{ $content := .RawContent }}
 {{ if findRE `## *(FAQ|Frequently Asked)` $content }}
-  {{/* Count ### headings after the FAQ section as proxy for FAQ count */}}
+  {{/* Extract ### headings and their following paragraph as Q&A pairs */}}
   {{ $faqQuestions := findRE `### +.+` $content }}
   {{ if ge (len $faqQuestions) 2 }}
+    {{/* Build parallel list of answers by splitting content after each ### */}}
+    {{ $faqAnswers := slice }}
+    {{ $faqSection := index (findRE `(?s)## *(?:FAQ|Frequently Asked)[^\n]*\n(.+?)(?:\n## |\z)` $content) 0 | default "" }}
+    {{ $qBlocks := findRE `(?s)### +[^\n]+\n+(.+?)(?:\n### |\z)` $faqSection }}
+    {{ range $qBlocks }}
+      {{ $answer := . | replaceRE `### +[^\n]+\n+` "" | plainify | truncate 300 }}
+      {{ $faqAnswers = $faqAnswers | append $answer }}
+    {{ end }}
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -154,7 +162,7 @@
       "name": {{ (replaceRE `### +` "" $q | plainify) | jsonify }},
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": ""
+        "text": {{ (index $faqAnswers $i | default "See the full article for details.") | jsonify }}
       }
     }{{ end }}
   ]

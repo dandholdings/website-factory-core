@@ -11,6 +11,22 @@ from datetime import date
 from pathlib import Path
 import yaml
 
+# Shared LLM client module — canonical implementations of llm_json(),
+# parse_json_strict_or_extract(), etc. live here. The inline copies below
+# are kept for backward compatibility but should be migrated to use
+# llm_client directly in a future cleanup pass.
+try:
+    from llm_client import (
+        llm_json as _shared_llm_json,
+        parse_json_strict_or_extract as _shared_parse_json,
+        safe_write_llm_dump as _shared_write_dump,
+        read_markdown_frontmatter as _shared_read_fm,
+        slugify as _shared_slugify,
+    )
+    _HAS_SHARED = True
+except ImportError:
+    _HAS_SHARED = False
+
 START_TIME = time.time()
 
 
@@ -800,13 +816,14 @@ def compute_contract_hash(site_config_path: str) -> str:
 def read_markdown_frontmatter(md_text: str):
     if not md_text.startswith("---"):
         return {}, md_text
-    # Strip the leading "---\n" then split on the closing "\n---\n"
+    # Strip the leading "---\n" then split on the closing "\n---"
     after_open = md_text[4:]  # skip "---\n"
-    parts = after_open.split("\n---\n", 1)
+    parts = after_open.split("\n---", 1)
     if len(parts) < 2:
         return {}, md_text
     fm_raw = parts[0]
-    body = parts[1]
+    # Body starts after the closing "---" and optional newlines
+    body = parts[1].lstrip("\n").lstrip("\r")
     try:
         fm = yaml.safe_load(fm_raw) or {}
         if not isinstance(fm, dict):
@@ -972,12 +989,12 @@ def generate_one_page(title: str, system: str, page_prompt: str, cfg: dict, pinn
         got_h2 = [h.strip() for h in got_h2]
         if got_h2 != required_h2:
             missing = [h for h in required_h2 if h not in got_h2]
-            extra = [h for h in got_h2 if h not in required_h2]
+            extra_h2 = [h for h in got_h2 if h not in required_h2]
             if missing:
                 print(f"  Missing H2 sections: {missing}")
-            if extra:
-                print(f"  Extra H2 sections: {extra}")
-            if not missing and not extra:
+            if extra_h2:
+                print(f"  Extra H2 sections: {extra_h2}")
+            if not missing and not extra_h2:
                 print(f"  H2 order wrong. Expected: ...{required_h2[-4:]}  Got: ...{got_h2[-4:]}")
             return False, {}
     else:
@@ -1307,14 +1324,20 @@ def link_injection_pass(content_root: Path, limit: int = 50):
 
     Reads all existing pages, finds those with fewer than 3 internal links,
     and injects links into their 'Related topics and deeper reading' section.
+
+    Only links to pages that have valid frontmatter (title, slug, hub) to avoid
+    injecting links to pages that quality_gates will later delete.
     """
-    # Build catalog of all existing pages
+    # Build catalog of all existing pages (only those with valid frontmatter)
     all_pages = {}  # slug -> {title, hub, tags, path}
     for md in content_root.glob("*/index.md"):
         try:
             raw = md.read_text(encoding="utf-8")
             fm, body = read_markdown_frontmatter(raw)
             slug = fm.get("slug") or md.parent.name
+            # Skip pages missing required frontmatter — they'll be deleted by quality_gates
+            if not fm.get("title") or not fm.get("hub"):
+                continue
             all_pages[slug] = {
                 "title": fm.get("title", slug.replace("-", " ").title()),
                 "hub": fm.get("hub", ""),
@@ -1404,9 +1427,11 @@ def main():
         page_prompt = page_prompt + f"\n\n=== AVAILABLE INTERNAL LINKS (grouped by hub — prefer same-hub links) ===\n{link_hints}\n\nYou MUST use links from this list. Prefer 3-4 links from YOUR hub + 1-2 from other hubs. Do NOT invent slugs. Do NOT use external URLs.\n"
     else:
         # Fresh bootstrap: no pages exist yet. Generate plausible sibling slugs from the titles pool.
+        # NOTE: These pages don't exist yet — they'll be created in subsequent runs.
+        # Early-stage pages get relaxed link validation (see strict_linking in generate_one_page).
         sibling_slugs = _generate_sibling_link_hints(TITLES_POOL_PATH, limit=20)
         if sibling_slugs:
-            page_prompt = page_prompt + f"\n\n=== AVAILABLE INTERNAL LINKS (use at least 6 from this list) ===\n{sibling_slugs}\n\nYou MUST use links from this list. Do NOT invent slugs. Do NOT use external URLs.\n"
+            page_prompt = page_prompt + f"\n\n=== PLANNED INTERNAL LINKS (these pages will be created alongside yours — use at least 6) ===\n{sibling_slugs}\n\nYou MUST use links from this list. These are sibling pages being generated in the same batch. Do NOT invent slugs. Do NOT use external URLs.\n"
 
     os.makedirs(CONTENT_ROOT, exist_ok=True)
     contract_hash = compute_contract_hash(site_cfg_path)
@@ -1487,7 +1512,6 @@ def main():
 
     produced = 0
     attempts = 0
-    retries = 0
     deletes = 0
     consec_fail = 0
 
@@ -1576,8 +1600,7 @@ def main():
     print("\n===== FACTORY SUMMARY =====")
     print(f"Pages attempted: {attempts}")
     print(f"Pages produced: {produced}")
-    print(f"Retries: {retries}")
-    print(f"Deletes: {deletes}")
+    print(f"Pages rejected: {deletes}")
     print(f"Duration: {duration // 60}m {duration % 60}s")
     print("===========================\n")
 

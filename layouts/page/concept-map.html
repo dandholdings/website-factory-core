@@ -23,8 +23,9 @@
     {{ $starters := slice }}
     {{ range $hubs }}
       {{ $pages := where site.RegularPages "Params.hub" .id }}
-      {{ if gt (len $pages) 0 }}
-        {{ $starters = $starters | append (index $pages 0) }}
+      {{ $sorted := sort $pages "Title" }}
+      {{ if gt (len $sorted) 0 }}
+        {{ $starters = $starters | append (index $sorted 0) }}
       {{ end }}
     {{ end }}
 

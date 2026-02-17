@@ -30,13 +30,19 @@
 }
 </style>
 {{ else }}
-{{/* Deterministic palette: hash site title to 0-15 */}}
+{{/* Deterministic palette: hash site title using character positions */}}
 {{ $title := .Site.Title }}
 {{ with site.Data.site }}{{ with .site }}{{ with .brand }}{{ $title = . }}{{ end }}{{ end }}{{ end }}
-{{ $hash := 0 }}
+{{ $hash := 5381 }}
+{{ $pos := 1 }}
 {{ range (split $title "") }}
-  {{ $hash = add $hash (len .) }}
+  {{/* djb2-style hash: multiply position into the accumulator for character-sensitive mixing */}}
+  {{ $charLen := len . }}
+  {{ $hash = add (mul $hash $pos) $charLen }}
+  {{ $pos = add $pos 1 }}
 {{ end }}
 {{ $index := mod $hash 16 }}
+{{/* Ensure non-negative index */}}
+{{ if lt $index 0 }}{{ $index = mul $index -1 }}{{ end }}
 <script>document.documentElement.setAttribute("data-palette","{{ $index }}");</script>
 {{ end }}

@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *.pyo
 
+# Runtime logs (LLM debug dumps)
+scripts/_logs/
+
 # OS
 .DS_Store
 Thumbs.db

@@ -226,6 +226,7 @@ def update_site_yaml_hub(cfg: dict, hub_id: str, cluster_intros: list, faqs: lis
 def main():
     parser = argparse.ArgumentParser(description="Fill hub content using Gemini Flash")
     parser.add_argument("--site-root", default="", help="Site root directory (e.g. sites/<slug>)")
+    parser.add_argument("--site-slug", default="", help="Site slug (resolves to sites/<slug>)")
     parser.add_argument("--hub", default="", help="Fill only this hub (by id)")
     parser.add_argument("--force", action="store_true", help="Overwrite existing content")
     parser.add_argument("--site-yaml", default="data/site.yaml", help="Path to site.yaml")
@@ -234,6 +235,10 @@ def main():
 
     if args.site_root:
         os.chdir(args.site_root)
+    elif args.site_slug:
+        target = Path("sites") / args.site_slug.strip()
+        target.mkdir(parents=True, exist_ok=True)
+        os.chdir(target)
 
     if not GEMINI_API_KEY:
         print("ERROR: GEMINI_API_KEY not set. Export it first.")

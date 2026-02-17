@@ -1009,13 +1009,13 @@ def main(site_slug: str = "", force_reset: bool = False):
 
     il = site_cfg["internal_linking"]
     il.setdefault("enabled", True)
-    il["min_links"] = max(int(il.get("min_links") or 3), 3)
+    il["min_links"] = max(int(il.get("min_links") or 6), 6)
     il["forbid_external"] = True
 
     gates = site_cfg["gates"]
     gates["wordcount_min"] = wc_min
     gates["wordcount_max"] = wc_max
-    gates["min_internal_links"] = 3
+    gates["min_internal_links"] = 6
     gates["forbid_external_links"] = True
     # FIX: Add faq_min/faq_max to gates output (was missing)
     gates["faq_min"] = gates.get("faq_min", 4)

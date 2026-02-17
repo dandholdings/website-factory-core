@@ -89,7 +89,7 @@ internal_linking:
   enabled: true
   same_hub_first: 3
   other_hubs_fill: 3
-  min_links: 3
+  min_links: 6
   forbid_external: true
 ads:
   provider: none
@@ -111,7 +111,7 @@ gates:
   wordcount_max: 1900
   enforce_headings_only: true
   max_sentences_per_paragraph: 3
-  min_internal_links: 3
+  min_internal_links: 6
   forbid_external_links: true
   no_click_here: true
   no_first_person: true

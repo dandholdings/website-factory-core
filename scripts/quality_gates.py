@@ -60,7 +60,6 @@ def performance_budget(site_cfg: Dict, pages: List[Path]) -> None:
             md = p.read_text(errors="ignore")
         _, body = read_frontmatter(md)
         total_words += _word_count(body)
-        total_words += _word_count(body)
         if total_words > max_words:
             break
 
