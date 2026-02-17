@@ -421,15 +421,31 @@ def read_markdown_frontmatter(md_text: str):
 
     Canonical implementation — all scripts should use this.
     Splits on "\\n---" (newline before closing ---), strips leading newlines from body.
+    Handles empty frontmatter (---\\n---) correctly.
     """
     if not md_text.startswith("---"):
         return {}, md_text
+    
+    # Skip the opening "---\n"
     after_open = md_text[4:]  # skip "---\n"
+    
+    # Check for empty frontmatter case: "---\n---" at the start
+    if after_open.startswith("---"):
+        # Empty frontmatter
+        body_start = after_open.find("\n", 3)  # Skip the closing "---"
+        if body_start == -1:
+            return {}, ""  # No body after empty frontmatter
+        body = after_open[body_start:].lstrip("\n").lstrip("\r")
+        return {}, body
+    
+    # Normal case: look for "\n---" as closing marker
     parts = after_open.split("\n---", 1)
     if len(parts) < 2:
         return {}, md_text
+    
     fm_raw = parts[0]
     body = parts[1].lstrip("\n").lstrip("\r")
+    
     try:
         import yaml
         fm = yaml.safe_load(fm_raw) or {}
@@ -437,6 +453,7 @@ def read_markdown_frontmatter(md_text: str):
             fm = {}
     except Exception:
         fm = {}
+    
     return fm, body
 
 

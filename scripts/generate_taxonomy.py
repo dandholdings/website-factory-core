@@ -28,6 +28,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from taxonomy_blueprints import select_blueprint, BLUEPRINTS
+from llm_client import slugify
+from sanitize import sanitize_niche_input
 
 
 def load_yaml(path: Path) -> dict:
@@ -39,14 +41,6 @@ def load_yaml(path: Path) -> dict:
 def save_yaml(path: Path, data: dict):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
-
-
-def slugify(s: str) -> str:
-    s = (s or "").strip().lower()
-    s = re.sub(r"[^a-z0-9]+", "-", s)
-    s = re.sub(r"-+", "-", s).strip("-")
-    return s or "site"
-
 
 
 def _resolve_override_path(name: str) -> Path | None:
@@ -150,6 +144,10 @@ def main():
     site_yaml_path = Path(args.site_yaml)
     cfg = load_yaml(site_yaml_path)
 
+    # Sanitize niche input if provided
+    if args.niche:
+        args.niche = sanitize_niche_input(args.niche)
+
     if not (args.niche or args.override_name):
         print("--niche is required unless --override-name is provided")
         sys.exit(2)
@@ -225,7 +223,10 @@ def main():
     print(f"Receipt written to {receipt_path}")
 
     # Summary
-    print(f"\n✅ Taxonomy generated: {len(hubs)} hubs, {sum(len(h.get('clusters', [])) for h in hubs)} clusters")
+    try:
+        print(f"\n✅ Taxonomy generated: {len(hubs)} hubs, {sum(len(h.get('clusters', [])) for h in hubs)} clusters")
+    except UnicodeEncodeError:
+        print(f"\n[OK] Taxonomy generated: {len(hubs)} hubs, {sum(len(h.get('clusters', [])) for h in hubs)} clusters")
     for h in hubs:
         c_count = len(h.get("clusters", []))
         print(f"   {h['id']}: {h['label']} ({c_count} clusters)")
