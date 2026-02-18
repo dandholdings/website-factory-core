@@ -55,6 +55,9 @@
     {{ end }}
   {{ end }}
 
+  {{/* Get pages for this hub */}}
+  {{ $rawPages := where site.RegularPages "Params.hub" $hubId }}
+
   {{/* Sort deterministically: by weight (for pinned ordering), then by title as tiebreaker */}}
   {{ $allPages := sort $rawPages "Title" }}
   {{ $allPages = sort $allPages "Weight" }}
