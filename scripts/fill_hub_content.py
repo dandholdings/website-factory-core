@@ -70,8 +70,72 @@ def write_markdown(fm: dict, body: str) -> str:
     return f"---\n{fm_str}\n---\n\n{body}\n"
 
 
+def repair_json_response(raw_text: str) -> dict:
+    """Robust JSON repair with multiple fallback strategies.
+    
+    Fixes common issues:
+    - Unclosed quotes
+    - Missing commas
+    - Trailing commas
+    - Markdown fences
+    - Truncated JSON
+    """
+    import json
+    import re
+    
+    # Clean markdown fences
+    cleaned = re.sub(r'^```(?:json)?\s*', '', raw_text.strip())
+    cleaned = re.sub(r'\s*```\s*$', '', cleaned)
+    
+    # Try direct parse first
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        error_msg = str(e)
+        print(f"  JSON parse error: {error_msg}")
+    
+    # Simple repairs
+    lines = cleaned.split('\n')
+    
+    # Fix unclosed quotes
+    for i, line in enumerate(lines):
+        if line.count('"') % 2 == 1:
+            lines[i] = line + '"'
+    
+    repaired = '\n'.join(lines)
+    
+    # Fix trailing commas before } or ]
+    repaired = re.sub(r',\s*([}\]])', r'\1', repaired)
+    
+    # Fix missing commas between objects in arrays
+    repaired = re.sub(r'"\s*"', '", "', repaired)
+    
+    # Try repaired version
+    try:
+        return json.loads(repaired)
+    except json.JSONDecodeError:
+        pass
+    
+    # Fallback: extract JSON object between first { and last }
+    start = repaired.find('{')
+    end = repaired.rfind('}')
+    if start != -1 and end > start:
+        try:
+            return json.loads(repaired[start:end+1])
+        except:
+            pass
+    
+    # Ultimate fallback: return minimal valid structure
+    print("  WARNING: JSON repair failed, returning minimal structure")
+    return {
+        "hub_intro_markdown": f"Content generation failed for this hub. Please regenerate.",
+        "clusters": [],
+        "faqs": []
+    }
+
+
 def call_gemini(system: str, user: str) -> dict:
-    """Call Gemini API and return parsed JSON."""
+    """Call Gemini API and return parsed JSON with robust repair."""
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY not set")
 
@@ -80,9 +144,10 @@ def call_gemini(system: str, user: str) -> dict:
         "contents": [{"role": "user", "parts": [{"text": user}]}],
         "systemInstruction": {"parts": [{"text": system}]},
         "generationConfig": {
-            "temperature": 0.7,
+            "temperature": 0.25,  # Lower temperature for more deterministic JSON
             "maxOutputTokens": 4096,
             "responseMimeType": "application/json",
+            "stopSequences": ["```"]  # Prevent markdown fences
         },
     }
     headers = {"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"}
@@ -103,17 +168,9 @@ def call_gemini(system: str, user: str) -> dict:
                 for p in c.get("content", {}).get("parts", []):
                     text += p.get("text", "")
 
-            # Clean and parse JSON
-            text = text.strip()
-            text = re.sub(r"^```(?:json)?\s*", "", text)
-            text = re.sub(r"\s*```\s*$", "", text)
-            return json.loads(text)
+            # Use robust JSON repair instead of simple parse
+            return repair_json_response(text)
 
-        except json.JSONDecodeError as e:
-            print(f"  JSON parse error (attempt {attempt+1}): {e}")
-            if attempt < MAX_RETRIES - 1:
-                time.sleep(2)
-            continue
         except Exception as e:
             print(f"  API error (attempt {attempt+1}): {e}")
             if attempt < MAX_RETRIES - 1:

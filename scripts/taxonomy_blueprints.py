@@ -12,6 +12,8 @@ Usage:
     bp = BLUEPRINTS[family_id]
 """
 
+import re
+
 # ---------------------------------------------------------------------------
 # Family → keyword mapping (deterministic selection)
 # ---------------------------------------------------------------------------
@@ -43,34 +45,100 @@ FAMILY_KEYWORDS = {
 }
 
 
-def select_blueprint(niche: str) -> str:
-    """Select the best-matching family for a niche string.
+def select_blueprint(niche: str, min_overlap_threshold: int = 4) -> str:
+    """Select the best-matching family for a niche string with relevance guard.
     
-    Returns family_id. Falls back to 'energy-efficiency' if no match.
+    Enhanced with theme detection to prevent mismatches like "oceanliving → energy-efficiency".
+    
+    Args:
+        niche: The niche/topic string
+        min_overlap_threshold: Minimum keyword overlap required to select a family (increased to 4)
+        
+    Returns:
+        family_id or "new-family" if no family meets the threshold
     """
     niche_lower = niche.lower().strip()
+    niche_words = set(re.findall(r'\w+', niche_lower))
     
+    # Detect niche theme
+    niche_theme = _detect_niche_theme(niche_lower)
+    
+    # Calculate overlap scores
     scores = {}
+    overlaps = {}
+    
     for family_id, keywords in FAMILY_KEYWORDS.items():
         score = 0
+        family_keyword_set = set()
+        
+        # Build set of all keyword words for this family
         for kw in keywords:
             if kw in niche_lower:
                 score += len(kw)  # longer keyword matches score higher
-        scores[family_id] = score
+            # Add individual words from keyword
+            family_keyword_set.update(re.findall(r'\w+', kw.lower()))
+        
+        # Calculate word overlap
+        word_overlap = len(niche_words & family_keyword_set)
+        overlaps[family_id] = word_overlap
+        scores[family_id] = score + (word_overlap * 10)  # Weight word overlap higher
     
+    # Find best match
     best = max(scores, key=scores.get)
-    if scores[best] == 0:
-        # No match — try word overlap
-        niche_words = set(niche_lower.split())
-        for family_id, keywords in FAMILY_KEYWORDS.items():
-            kw_words = set()
-            for kw in keywords:
-                kw_words.update(kw.split())
-            overlap = len(niche_words & kw_words)
-            scores[family_id] = overlap
-        best = max(scores, key=scores.get)
+    best_overlap = overlaps.get(best, 0)
     
-    return best if scores[best] > 0 else "energy-efficiency"
+    # Apply relevance guard with higher threshold
+    if best_overlap < min_overlap_threshold:
+        # Not enough overlap - create new family instead of forcing wrong match
+        return "new-family"
+    
+    # Also check if the best score is too low
+    if scores[best] < 5:  # Very low score threshold
+        return "new-family"
+    
+    # Theme mismatch check - prevent "ocean" niches from selecting "energy" families
+    if niche_theme:
+        family_theme = _get_family_theme(best)
+        if family_theme and niche_theme != family_theme:
+            # Themes don't match - create new family
+            return "new-family"
+    
+    return best
+
+
+def _detect_niche_theme(niche_lower: str) -> str:
+    """Detect the broad theme of a niche to prevent category mismatches.
+    
+    Returns:
+        Theme string like "energy", "home", "digital", "decision", or empty string
+    """
+    # Theme detection patterns
+    theme_patterns = {
+        "energy": ["energy", "electric", "power", "solar", "wind", "battery", "grid", "watt", "volt"],
+        "home": ["home", "house", "residential", "property", "real estate", "building", "construction"],
+        "digital": ["digital", "tech", "software", "app", "mobile", "computer", "internet", "online"],
+        "decision": ["decision", "choice", "judgment", "thinking", "cognitive", "bias", "heuristic"],
+        "ocean": ["ocean", "sea", "marine", "water", "fishing", "sailing", "coastal", "beach"],
+        "health": ["health", "medical", "fitness", "wellness", "diet", "nutrition", "exercise"],
+    }
+    
+    for theme, keywords in theme_patterns.items():
+        for kw in keywords:
+            if kw in niche_lower:
+                return theme
+    
+    return ""
+
+
+def _get_family_theme(family_id: str) -> str:
+    """Get the theme of a blueprint family."""
+    family_themes = {
+        "energy-efficiency": "energy",
+        "home-systems": "home",
+        "digital-habits": "digital",
+        "decision-science": "decision",
+    }
+    return family_themes.get(family_id, "")
 
 
 # ---------------------------------------------------------------------------
