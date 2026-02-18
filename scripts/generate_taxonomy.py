@@ -285,6 +285,11 @@ def main():
                     pages_per_hub=args.pages_per_hub,
                     family_id="new-family"
                 )
+                
+                # Check if plan is None (generation failed)
+                if plan is None:
+                    raise ValueError("generate_plan_contract returned None")
+                
                 # Use plan-based taxonomy
                 family_id = plan.get("family_id", "new-family")
                 family_label = plan.get("family_label", "Custom Family")
@@ -304,40 +309,43 @@ def main():
                 bp = {"family_label": family_label, "hubs": hubs}
                 print(f"Generated custom plan: {family_label} ({len(hubs)} hubs)")
                 
-            except ImportError as e:
-                print(f"Cannot import plan_generator: {e}")
-                print("Falling back to default blueprint (energy-efficiency)")
-                family_id = "energy-efficiency"
-                bp = BLUEPRINTS[family_id]
-                print(f"Selected default blueprint: {family_id} ({bp['family_label']})")
-                
-                # Trim hubs/clusters to requested counts
-                hubs = []
-                for h in bp["hubs"][:args.hub_count]:
-                    hub = dict(h)
-                    clusters = hub.get("clusters", [])[:args.clusters_per_hub]
-                    hub["clusters"] = clusters
-                    # Ensure related_hubs only reference hubs we're using
-                    used_ids = {hh["id"] for hh in bp["hubs"][:args.hub_count]}
-                    hub["related_hubs"] = [r for r in hub.get("related_hubs", []) if r in used_ids][:3]
-                    hubs.append(hub)
-            except Exception as e:
+            except (ImportError, ValueError, Exception) as e:
                 print(f"Failed to generate custom plan: {e}")
-                print("Falling back to default blueprint (energy-efficiency)")
-                family_id = "energy-efficiency"
-                bp = BLUEPRINTS[family_id]
-                print(f"Selected default blueprint: {family_id} ({bp['family_label']})")
+                print("Creating minimal niche-specific plan instead of falling back to unrelated blueprint")
                 
-                # Trim hubs/clusters to requested counts
+                # Create a minimal niche-specific plan instead of using energy-efficiency
+                # This ensures we don't give wrong hubs for ocean/desert/underground niches
+                family_id = "new-family"
+                family_label = f"Custom {args.niche.title()} Family"
+                
+                # Generate simple hub names based on niche
+                niche_words = args.niche.lower().split()
+                hub_base = niche_words[0] if niche_words else "topic"
+                
                 hubs = []
-                for h in bp["hubs"][:args.hub_count]:
-                    hub = dict(h)
-                    clusters = hub.get("clusters", [])[:args.clusters_per_hub]
-                    hub["clusters"] = clusters
-                    # Ensure related_hubs only reference hubs we're using
-                    used_ids = {hh["id"] for hh in bp["hubs"][:args.hub_count]}
-                    hub["related_hubs"] = [r for r in hub.get("related_hubs", []) if r in used_ids][:3]
-                    hubs.append(hub)
+                for i in range(args.hub_count):
+                    hub_num = i + 1
+                    hub_id = f"{hub_base}-{hub_num}"
+                    hub_label = f"{args.niche.title()} {hub_num}: {hub_base.title()} Aspects"
+                    hub_desc = f"Explore various aspects of {args.niche} related to {hub_base}."
+                    
+                    # Create simple clusters
+                    clusters = []
+                    for j in range(min(args.clusters_per_hub, 3)):
+                        cluster_id = f"{hub_id}-cluster-{j+1}"
+                        cluster_label = f"{hub_base.title()} Cluster {j+1}"
+                        clusters.append({"id": cluster_id, "label": cluster_label})
+                    
+                    hubs.append({
+                        "id": hub_id,
+                        "label": hub_label,
+                        "description": hub_desc,
+                        "clusters": clusters,
+                        "related_hubs": []
+                    })
+                
+                bp = {"family_label": family_label, "hubs": hubs}
+                print(f"Created minimal niche-specific plan: {family_label} ({len(hubs)} hubs)")
         else:
             # Use existing blueprint
             bp = BLUEPRINTS[family_id]
