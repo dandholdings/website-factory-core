@@ -1279,13 +1279,46 @@ def mark_done(title: str) -> None:
         pass
 
 
+# --- Frontmatter cache for performance optimization ---
+_FRONTMATTER_CACHE = {}
+_FRONTMATTER_CACHE_TIMESTAMPS = {}
+
+def _get_cached_frontmatter(file_path: Path) -> tuple:
+    """Get frontmatter from cache or parse and cache it."""
+    global _FRONTMATTER_CACHE, _FRONTMATTER_CACHE_TIMESTAMPS
+    
+    try:
+        mtime = file_path.stat().st_mtime
+        cached = _FRONTMATTER_CACHE.get(str(file_path))
+        cached_time = _FRONTMATTER_CACHE_TIMESTAMPS.get(str(file_path))
+        
+        # Return cached if still valid
+        if cached is not None and cached_time == mtime:
+            return cached
+        
+        # Parse and cache
+        raw = file_path.read_text(encoding="utf-8")
+        fm, body = read_markdown_frontmatter(raw)
+        
+        _FRONTMATTER_CACHE[str(file_path)] = (fm, body)
+        _FRONTMATTER_CACHE_TIMESTAMPS[str(file_path)] = mtime
+        
+        return fm, body
+    except Exception:
+        return {}, ""
+
+def _clear_frontmatter_cache():
+    """Clear the frontmatter cache."""
+    global _FRONTMATTER_CACHE, _FRONTMATTER_CACHE_TIMESTAMPS
+    _FRONTMATTER_CACHE.clear()
+    _FRONTMATTER_CACHE_TIMESTAMPS.clear()
+
 def _count_pages_per_hub(content_root: Path) -> dict:
     """Count existing published pages per hub."""
     counts = {}
     for md in content_root.glob("*/index.md"):
         try:
-            raw = md.read_text(encoding="utf-8")
-            fm, _ = read_markdown_frontmatter(raw)
+            fm, _ = _get_cached_frontmatter(md)
             hub = str(fm.get("hub", "")).strip()
             if hub:
                 counts[hub] = counts.get(hub, 0) + 1
@@ -1294,11 +1327,13 @@ def _count_pages_per_hub(content_root: Path) -> dict:
     return counts
 
 
-def _select_hub_batched_titles(todo_items: list, content_root: Path, hub_min: int = 10) -> list:
+def _select_hub_batched_titles(todo_items: list, content_root: Path, hub_min: int = 10, max_hubs_per_batch: int = 3) -> list:
     """Select titles prioritizing hubs that need more pages.
 
     Strategy: fill each hub to hub_min pages before moving to the next.
     This ensures every hub has enough siblings for internal linking.
+    
+    OPTIMIZATION: Process hubs incrementally in batches to avoid overwhelming the system.
     """
     hub_counts = _count_pages_per_hub(content_root)
 
@@ -1310,11 +1345,35 @@ def _select_hub_batched_titles(todo_items: list, content_root: Path, hub_min: in
 
     # Prioritize hubs under the minimum, then hubs with the fewest pages
     ordered_titles = []
-    hub_priority = sorted(by_hub.keys(), key=lambda h: hub_counts.get(h, 0))
-
-    for hub in hub_priority:
+    
+    # Sort hubs by priority: those under hub_min first, then by count
+    hub_priority = []
+    for hub in by_hub.keys():
+        count = hub_counts.get(hub, 0)
+        if count < hub_min:
+            hub_priority.append((0, count, hub))  # Highest priority: under minimum
+        else:
+            hub_priority.append((1, count, hub))  # Lower priority: already at minimum
+    
+    hub_priority.sort(key=lambda x: (x[0], x[1]))
+    
+    # Take only max_hubs_per_batch hubs at a time for incremental processing
+    selected_hubs = [hub for _, _, hub in hub_priority[:max_hubs_per_batch]]
+    
+    for hub in selected_hubs:
         items = by_hub[hub]
-        ordered_titles.extend([it.get("title", "").strip() for it in items if it.get("title")])
+        # Take up to hub_min - current_count items from this hub
+        current_count = hub_counts.get(hub, 0)
+        needed = max(0, hub_min - current_count)
+        
+        if needed > 0:
+            # Take needed items or all items if fewer available
+            items_to_take = min(needed, len(items))
+            ordered_titles.extend([it.get("title", "").strip() for it in items[:items_to_take] if it.get("title")])
+        else:
+            # Hub already at minimum, take a few items anyway
+            items_to_take = min(5, len(items))  # Small batch for maintenance
+            ordered_titles.extend([it.get("title", "").strip() for it in items[:items_to_take] if it.get("title")])
 
     return ordered_titles
 
@@ -1327,25 +1386,40 @@ def link_injection_pass(content_root: Path, limit: int = 50):
 
     Only links to pages that have valid frontmatter (title, slug, hub) to avoid
     injecting links to pages that quality_gates will later delete.
+    
+    OPTIMIZATION: Uses frontmatter cache and optimized algorithm.
     """
+    import time
+    start_time = time.time()
+    
     # Build catalog of all existing pages (only those with valid frontmatter)
     all_pages = {}  # slug -> {title, hub, tags, path}
+    hub_pages = {}  # hub -> list of slugs for faster lookup
+    
+    # First pass: collect all pages using cache
     for md in content_root.glob("*/index.md"):
         try:
-            raw = md.read_text(encoding="utf-8")
-            fm, body = read_markdown_frontmatter(raw)
+            fm, body = _get_cached_frontmatter(md)
             slug = fm.get("slug") or md.parent.name
-            # Skip pages missing required frontmatter — they'll be deleted by quality_gates
+            
+            # Skip pages missing required frontmatter
             if not fm.get("title") or not fm.get("hub"):
                 continue
+                
+            hub = fm.get("hub", "")
+            tags = set(fm.get("tags", []))
+            
             all_pages[slug] = {
                 "title": fm.get("title", slug.replace("-", " ").title()),
-                "hub": fm.get("hub", ""),
-                "tags": set(fm.get("tags", [])),
+                "hub": hub,
+                "tags": tags,
                 "path": md,
                 "body": body,
                 "fm": fm,
             }
+            
+            # Build hub index for faster lookup
+            hub_pages.setdefault(hub, []).append(slug)
         except Exception:
             continue
 
@@ -1354,25 +1428,53 @@ def link_injection_pass(content_root: Path, limit: int = 50):
         return 0
 
     fixed = 0
-    for slug, info in list(all_pages.items())[:limit]:
+    processed = 0
+    
+    # Pre-compute tag sets for faster intersection
+    tag_sets = {slug: info["tags"] for slug, info in all_pages.items()}
+    
+    # Process pages in order of need (those with fewest links first)
+    pages_to_process = []
+    for slug, info in all_pages.items():
         body = info["body"]
         existing_links = re.findall(r'\[.*?\]\(/pages/([a-z0-9-]+)/\)', body)
-        if len(existing_links) >= 3:
+        link_count = len(existing_links)
+        if link_count < 3:
+            pages_to_process.append((link_count, slug, info, existing_links))
+    
+    # Sort by fewest links first
+    pages_to_process.sort(key=lambda x: x[0])
+    
+    for link_count, slug, info, existing_links in pages_to_process[:limit]:
+        processed += 1
+        body = info["body"]
+        hub = info["hub"]
+        
+        if link_count >= 3:
             continue
 
-        # Find best link targets: same hub first, then by tag overlap
+        # OPTIMIZED: Find best link targets using hub index
         candidates = []
-        for other_slug, other in all_pages.items():
+        
+        # First, try pages from the same hub (fast lookup)
+        same_hub_slugs = hub_pages.get(hub, [])
+        for other_slug in same_hub_slugs:
             if other_slug == slug or other_slug in existing_links:
                 continue
-            score = 0
-            if other["hub"] == info["hub"]:
-                score += 10
-            score += len(info["tags"] & other["tags"])
+            other = all_pages[other_slug]
+            score = 10 + len(info["tags"] & other["tags"])  # Base score for same hub
             candidates.append((score, other_slug, other["title"]))
-
+        
+        # If we need more candidates, try other hubs
+        if len(candidates) < (3 - link_count):
+            for other_slug, other in all_pages.items():
+                if other_slug == slug or other_slug in existing_links or other_slug in same_hub_slugs:
+                    continue
+                score = len(info["tags"] & other["tags"])
+                candidates.append((score, other_slug, other["title"]))
+        
         candidates.sort(key=lambda x: -x[0])
-        needed = 3 - len(existing_links)
+        needed = 3 - link_count
         picks = candidates[:needed]
 
         if not picks:
@@ -1403,7 +1505,14 @@ def link_injection_pass(content_root: Path, limit: int = 50):
         md_text = write_markdown_with_frontmatter(info["fm"], body)
         info["path"].write_text(md_text, encoding="utf-8")
         fixed += 1
-
+    
+    # Clear cache after modifications
+    _clear_frontmatter_cache()
+    
+    end_time = time.time()
+    if processed > 0:
+        print(f"[PERF] link_injection_pass processed {processed} pages, fixed {fixed} in {end_time-start_time:.2f}s")
+    
     return fixed
 
 
@@ -1500,7 +1609,8 @@ def main():
     hub_map = {}  # title -> hub_id from titles_pool.txt
     if todo_items:
         # Hub-batched selection: prioritize hubs that need more pages
-        titles = _select_hub_batched_titles(todo_items, CONTENT_ROOT, hub_min=10)
+        # Use incremental processing: max 3 hubs per batch
+        titles = _select_hub_batched_titles(todo_items, CONTENT_ROOT, hub_min=10, max_hubs_per_batch=3)
     else:
         titles = load_titles()
         hub_map = load_titles_with_hubs()

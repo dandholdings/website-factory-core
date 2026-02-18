@@ -1,0 +1,38 @@
+# Never include git internals
+.git/
+**/.git/
+
+# Python noise / binaries
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Build / output
+dist/
+build/
+out/
+public/
+.site/
+.hugo_build.lock
+.DS_Store
+
+# Node (if it appears later)
+node_modules/
+npm-debug.log*
+yarn.lock
+pnpm-lock.yaml
+
+# Large / generated misc
+*.log
+*.zip
+*.tar
+*.gz
