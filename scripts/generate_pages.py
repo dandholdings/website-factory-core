@@ -162,10 +162,10 @@ MAX_OUTPUT_TOKENS = _safe_int(os.getenv("MAX_OUTPUT_TOKENS"), 4096)
 
 # FIX: Temperature — only clamp for Moonshot/Kimi. Let Gemini use any value.
 try:
-    _t_raw = os.getenv("TEMPERATURE", "0.7").strip()
+    _t_raw = os.getenv("TEMPERATURE", "0.25").strip()  # Lower default for more deterministic JSON
     TEMPERATURE = float(_t_raw)
 except Exception:
-    TEMPERATURE = 0.7
+    TEMPERATURE = 0.25
 
 # Only force temperature=1 for Moonshot/Kimi (legacy constraint).
 # Gemini Flash 2.5 works fine with 0.7 or any valid float.

@@ -53,10 +53,10 @@ HTTP_MAX_TRIES = _safe_int(os.getenv("HTTP_MAX_TRIES") or os.getenv("KIMI_HTTP_M
 BACKOFF_BASE = float(os.getenv("BACKOFF_BASE", os.getenv("KIMI_BACKOFF_BASE", "1.7")) or "1.7")
 
 try:
-    _t_raw = os.getenv("TEMPERATURE", "0.7").strip()
+    _t_raw = os.getenv("TEMPERATURE", "0.25").strip()  # Lower default for more deterministic JSON
     TEMPERATURE = float(_t_raw)
 except Exception:
-    TEMPERATURE = 0.7
+    TEMPERATURE = 0.25
 
 # Only force temperature=1 for Moonshot/Kimi (legacy constraint).
 if PROVIDER == "moonshot" and TEMPERATURE != 1:
@@ -272,6 +272,7 @@ def llm_json(system: str, user: str, temperature: float = None, max_tokens: int 
                 "temperature": float(temp),
                 "maxOutputTokens": int(max_tokens),
                 "responseMimeType": "application/json",
+                "stopSequences": ["```"],  # Prevent markdown fences
                 "thinkingConfig": {"thinkingBudget": 0},
             },
         }

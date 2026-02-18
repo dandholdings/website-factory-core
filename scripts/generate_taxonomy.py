@@ -188,7 +188,6 @@ def main():
             print(f"Plan file not found: {plan_path}")
             sys.exit(1)
         try:
-            import json
             plan_data = json.loads(plan_path.read_text(encoding="utf-8"))
             plan = plan_data.get("plan") if isinstance(plan_data, dict) and "plan" in plan_data else plan_data
             print(f"Loaded plan from {plan_path}")
@@ -199,7 +198,7 @@ def main():
     # Generate new plan if requested
     elif args.generate_plan and args.niche:
         try:
-            from plan_generator import generate_plan_contract, save_plan
+            from plan_generator import generate_plan_contract
             print(f"Generating plan for niche: {args.niche}")
             plan = generate_plan_contract(
                 niche=args.niche,
@@ -210,7 +209,8 @@ def main():
             )
             # Save the generated plan
             plan_path = Path("scripts") / "generated_plan.json"
-            save_plan(plan, plan_path)
+            plan_path.parent.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text(json.dumps(plan, indent=2, ensure_ascii=False), encoding="utf-8")
             print(f"Plan generated and saved to {plan_path}")
         except ImportError as e:
             print(f"Cannot import plan_generator: {e}")
@@ -277,7 +277,7 @@ def main():
         if family_id == "new-family":
             print(f"No existing blueprint matches niche '{args.niche}'. Generating custom plan...")
             try:
-                from plan_generator import generate_plan_contract, save_plan
+                from plan_generator import generate_plan_contract
                 plan = generate_plan_contract(
                     niche=args.niche,
                     hub_count=args.hub_count,
