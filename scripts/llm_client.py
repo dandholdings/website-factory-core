@@ -14,6 +14,7 @@ import time
 import random
 import hashlib
 from pathlib import Path
+from typing import Optional
 
 import requests
 

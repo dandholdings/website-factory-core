@@ -254,7 +254,7 @@ def main():
 
     # Check if we should use NicheSpec pre-pass
     if args.use_niche_spec and args.niche and not plan and not override:
-        print(f"🔍 Using NicheSpec pre-pass for niche: {args.niche}")
+        print(f"[SEARCH] Using NicheSpec pre-pass for niche: {args.niche}")
         
         try:
             from niche_spec import generate_niche_spec, generate_taxonomy_from_niche_spec
@@ -264,7 +264,7 @@ def main():
             site_root = Path.cwd()
             niche_spec = generate_niche_spec(args.niche, site_root)
             
-            print(f"  ✅ NicheSpec generated: {len(niche_spec.core_entities)} entities, {len(niche_spec.core_problems)} problems")
+            print(f"  [OK] NicheSpec generated: {len(niche_spec.core_entities)} entities, {len(niche_spec.core_problems)} problems")
             
             # Generate taxonomy from NicheSpec
             print("  Generating taxonomy from NicheSpec...")
@@ -280,18 +280,18 @@ def main():
             hubs = taxonomy_result.get("hubs", [])
             bp = {"family_label": family_label, "hubs": hubs}
             
-            print(f"  ✅ Taxonomy generated from NicheSpec: {family_label} ({len(hubs)} hubs)")
+            print(f"  [OK] Taxonomy generated from NicheSpec: {family_label} ({len(hubs)} hubs)")
             
             # Skip blueprint selection and go directly to CIV validation
             plan = None
             override = None
             
         except ImportError as e:
-            print(f"⚠️  NicheSpec module not available: {e}")
+            print(f"[WARNING]  NicheSpec module not available: {e}")
             print("  Falling back to traditional blueprint selection")
             args.use_niche_spec = False
         except Exception as e:
-            print(f"⚠️  NicheSpec generation failed: {e}")
+            print(f"[WARNING]  NicheSpec generation failed: {e}")
             print("  Falling back to traditional blueprint selection")
             args.use_niche_spec = False
     
@@ -491,7 +491,7 @@ def main():
         validated_hubs, civ_warnings = validate_hub_structure(hubs, args.niche, site_root)
         
         if civ_warnings:
-            print(f"⚠️  CIV warnings ({len(civ_warnings)}):")
+            print(f"[WARNING]  CIV warnings ({len(civ_warnings)}):")
             for warning in civ_warnings[:5]:  # Show first 5 warnings
                 print(f"   - {warning}")
             if len(civ_warnings) > 5:
@@ -499,14 +499,14 @@ def main():
             
             # Use validated hubs
             hubs = validated_hubs
-            print(f"✅ Applied CIV validation: {len(hubs)} hubs now have concrete, high-intent titles")
+            print(f"[OK] Applied CIV validation: {len(hubs)} hubs now have concrete, high-intent titles")
         else:
-            print("✅ All hub and cluster titles passed CIV validation")
+            print("[OK] All hub and cluster titles passed CIV validation")
             
     except ImportError as e:
-        print(f"⚠️  CIV not available: {e}. Proceeding without concrete intent validation.")
+        print(f"[WARNING]  CIV not available: {e}. Proceeding without concrete intent validation.")
     except Exception as e:
-        print(f"⚠️  CIV validation failed: {e}. Proceeding without concrete intent validation.")
+        print(f"[WARNING]  CIV validation failed: {e}. Proceeding without concrete intent validation.")
 
     # Update site.yaml
     if "taxonomy" not in cfg:
@@ -528,7 +528,7 @@ def main():
 
     # Summary
     try:
-        print(f"\n✅ Taxonomy generated: {len(hubs)} hubs, {sum(len(h.get('clusters', [])) for h in hubs)} clusters")
+        print(f"\n[OK] Taxonomy generated: {len(hubs)} hubs, {sum(len(h.get('clusters', [])) for h in hubs)} clusters")
     except UnicodeEncodeError:
         print(f"\n[OK] Taxonomy generated: {len(hubs)} hubs, {sum(len(h.get('clusters', [])) for h in hubs)} clusters")
     for h in hubs:

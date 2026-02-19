@@ -654,7 +654,7 @@ if __name__ == "__main__":
     try:
         spec = generate_niche_spec(args.niche)
         
-        print(f"✅ NicheSpec generated successfully for: {args.niche}")
+        print(f"[OK] NicheSpec generated successfully for: {args.niche}")
         print(f"   Core entities: {len(spec.core_entities)} items")
         print(f"   Core problems: {len(spec.core_problems)} items")
         print(f"   Keywords: {len(spec.keywords)} items")
@@ -662,10 +662,10 @@ if __name__ == "__main__":
         if args.output:
             with open(args.output, 'w', encoding='utf-8') as f:
                 json.dump(spec.to_dict(), f, indent=2, ensure_ascii=False)
-            print(f"✅ Saved to: {args.output}")
+            print(f"[OK] Saved to: {args.output}")
         else:
             print("\n" + json.dumps(spec.to_dict(), indent=2, ensure_ascii=False))
     
     except Exception as e:
-        print(f"❌ Failed to generate NicheSpec: {e}")
+        print(f"[FAIL] Failed to generate NicheSpec: {e}")
         sys.exit(1)
