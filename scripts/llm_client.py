@@ -281,16 +281,15 @@ def llm_json(system: str, user: str, temperature: float = None, max_tokens: int 
 
     def _gemini_request_payload() -> tuple:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
-        # Combine system and user with STRONG JSON-only instructions
+        # Combine system and user with clear JSON-only instructions
+        # Use a more positive, less restrictive approach to avoid empty responses
         prompt = (
             system.strip()
             + "\n\n"
-            + "CRITICAL INSTRUCTIONS:\n"
-            + "1. Output MUST be a single valid JSON object or array ONLY\n"
-            + "2. DO NOT include any explanatory text, markdown, code fences, or commentary\n"
-            + "3. DO NOT say 'Here is the JSON requested:' or similar phrases\n"
-            + "4. The response must begin with either '{' or '[' and end with '}' or ']'\n"
-            + "5. No other text before or after the JSON\n\n"
+            + "IMPORTANT: Please output ONLY a valid JSON object or array.\n"
+            + "- Begin with '{' or '[' and end with '}' or ']'\n"
+            + "- Do not include explanatory text, markdown, or code fences\n"
+            + "- Example of correct output: {\"data\": [\"item1\", \"item2\"]} or [\"item1\", \"item2\"]\n\n"
             + user.strip()
         )
         payload = {
@@ -299,7 +298,7 @@ def llm_json(system: str, user: str, temperature: float = None, max_tokens: int 
                 "temperature": float(temp),
                 "maxOutputTokens": int(max_tokens),
                 "responseMimeType": "application/json",
-                "stopSequences": ["```", "Here is", "The JSON", "Below is", "I'll provide"],  # Prevent explanatory text
+                "stopSequences": ["```", "Here is the JSON"],  # Only block the most problematic phrases
                 "thinkingConfig": {"thinkingBudget": 0},
             },
         }
@@ -312,13 +311,13 @@ def llm_json(system: str, user: str, temperature: float = None, max_tokens: int 
     def _moonshot_request_payload() -> tuple:
         url = f"{MOONSHOT_BASE_URL}/chat/completions"
         headers = {"Authorization": f"Bearer {MOONSHOT_API_KEY}", "Content-Type": "application/json"}
-        # Enhanced system prompt for JSON-only output
+        # Clear system prompt for JSON-only output (less restrictive)
         enhanced_system = (
             system.strip()
-            + "\n\nCRITICAL: You must output ONLY a valid JSON object or array. "
-            + "Do not include any explanatory text, markdown, code fences, or commentary. "
-            + "Do not say 'Here is the JSON requested:' or similar phrases. "
-            + "The response must begin with either '{' or '[' and end with '}' or ']'."
+            + "\n\nIMPORTANT: Output ONLY a valid JSON object or array. "
+            + "Do not include explanatory text, markdown, or code fences. "
+            + "Begin with '{' or '[' and end with '}' or ']'. "
+            + "Example: {\"data\": [\"item1\", \"item2\"]} or [\"item1\", \"item2\"]"
         )
         payload = {
             "model": MOONSHOT_MODEL,
