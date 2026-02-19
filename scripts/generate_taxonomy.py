@@ -400,63 +400,121 @@ def main():
             else:
                 # Plan generation failed even after retries
                 print(f"Failed to generate custom plan after {max_retries + 1} attempts: {last_error}")
-                print("Creating enhanced niche-specific plan with diverse hubs...")
+                print("Creating domain-specific niche plan using NicheResolver...")
                 
-                # Create an enhanced niche-specific plan with diverse hub names
+                # Create a domain-specific plan using NicheResolver
                 family_id = "new-family"
                 family_label = f"Custom {args.niche.title()} Family"
                 
-                # Generate diverse hub themes based on niche words and common aspects
-                niche_lower = args.niche.lower()
-                niche_words = niche_lower.split()
+                # Use NicheResolver to get domain-specific hub themes
+                try:
+                    from niche_resolver import NicheBreadthResolver, DomainCategory
+                    resolver = NicheBreadthResolver()
+                    analysis = resolver.analyze(args.niche)
+                    
+                    print(f"  Domain classified as: {analysis.domain.name}")
+                    print(f"  Recommended hub themes: {analysis.recommended_hub_themes}")
+                    
+                    # Use domain-specific hub themes if available
+                    if analysis.recommended_hub_themes and len(analysis.recommended_hub_themes) > 0:
+                        hub_themes = analysis.recommended_hub_themes
+                        print(f"  Using domain-specific hub themes for {analysis.domain.name}")
+                    else:
+                        # Fallback to domain-specific themes based on domain
+                        if analysis.domain == DomainCategory.ANIMALS:
+                            hub_themes = [
+                                "Species Identification", "Habitat Management", "Behavior Studies",
+                                "Conservation Efforts", "Animal Care", "Research Methods",
+                                "Ethical Guidelines", "Field Techniques"
+                            ]
+                        elif analysis.domain == DomainCategory.NATURE:
+                            hub_themes = [
+                                "Ecosystem Basics", "Plant Identification", "Geological Features",
+                                "Conservation Practices", "Observation Techniques", "Field Guides",
+                                "Environmental Impact", "Sustainable Practices"
+                            ]
+                        elif analysis.domain == DomainCategory.OUTDOORS:
+                            hub_themes = [
+                                "Gear & Equipment", "Navigation Skills", "Safety Protocols",
+                                "Environmental Ethics", "Trip Planning", "Survival Skills",
+                                "Wildlife Knowledge", "Weather Preparedness"
+                            ]
+                        elif analysis.domain == DomainCategory.PHOTOGRAPHY:
+                            hub_themes = [
+                                "Camera Equipment", "Lighting Techniques", "Composition Rules",
+                                "Editing Software", "Genre Specialties", "Business of Photography",
+                                "Workflow Optimization", "Client Management"
+                            ]
+                        else:
+                            # Use general domain themes
+                            hub_themes = [
+                                "Core Concepts", "Practical Techniques", "Strategic Approaches",
+                                "Essential Tools", "Key Benefits", "Common Challenges",
+                                "Learning Resources", "Expert Community"
+                            ]
+                    
+                except ImportError as e:
+                    print(f"  [WARNING] NicheResolver not available: {e}")
+                    print("  Falling back to domain-aware generic themes")
+                    
+                    # Simple domain detection for fallback
+                    niche_lower = args.niche.lower()
+                    if any(word in niche_lower for word in ["bird", "animal", "pet", "wildlife"]):
+                        hub_themes = [
+                            "Species Identification", "Habitat Management", "Behavior Studies",
+                            "Conservation Efforts", "Animal Care", "Research Methods"
+                        ]
+                    elif any(word in niche_lower for word in ["nature", "environment", "ecology"]):
+                        hub_themes = [
+                            "Ecosystem Basics", "Plant Identification", "Geological Features",
+                            "Conservation Practices", "Observation Techniques", "Field Guides"
+                        ]
+                    elif any(word in niche_lower for word in ["photo", "camera", "lens", "shoot"]):
+                        hub_themes = [
+                            "Camera Equipment", "Lighting Techniques", "Composition Rules",
+                            "Editing Software", "Genre Specialties", "Business of Photography"
+                        ]
+                    elif any(word in niche_lower for word in ["outdoor", "hiking", "camping", "trail"]):
+                        hub_themes = [
+                            "Gear & Equipment", "Navigation Skills", "Safety Protocols",
+                            "Environmental Ethics", "Trip Planning", "Survival Skills"
+                        ]
+                    else:
+                        hub_themes = [
+                            "Core Concepts", "Practical Techniques", "Strategic Approaches",
+                            "Essential Tools", "Key Benefits", "Common Challenges"
+                        ]
                 
-                # Common aspect themes for various niches
-                aspect_themes = [
-                    "fundamentals", "techniques", "strategies", "tools",
-                    "benefits", "challenges", "resources", "community",
-                    "innovation", "sustainability", "health", "safety",
-                    "design", "implementation", "maintenance", "optimization"
-                ]
-                
-                # Niche-specific aspect themes based on keywords
-                niche_aspects = []
-                if any(word in niche_lower for word in ["living", "lifestyle", "life"]):
-                    niche_aspects = ["home", "health", "community", "sustainability", "wellness", "family", "environment", "culture"]
-                elif any(word in niche_lower for word in ["tech", "digital", "software", "app"]):
-                    niche_aspects = ["tools", "techniques", "security", "productivity", "innovation", "automation", "integration", "development"]
-                elif any(word in niche_lower for word in ["energy", "power", "solar", "wind"]):
-                    niche_aspects = ["efficiency", "savings", "technology", "installation", "maintenance", "sustainability", "innovation", "safety"]
-                elif any(word in niche_lower for word in ["ocean", "marine", "sea", "water"]):
-                    niche_aspects = ["conservation", "exploration", "safety", "technology", "ecosystems", "recreation", "research", "sustainability"]
-                elif any(word in niche_lower for word in ["desert", "arid", "dry"]):
-                    niche_aspects = ["survival", "conservation", "ecology", "adaptation", "technology", "culture", "exploration", "sustainability"]
-                elif any(word in niche_lower for word in ["underground", "cave", "subterranean"]):
-                    niche_aspects = ["shelter", "safety", "exploration", "technology", "ecology", "conservation", "design", "sustainability"]
-                else:
-                    # Use generic aspects
-                    niche_aspects = aspect_themes[:args.hub_count]
-                
-                # Ensure we have enough aspects
-                while len(niche_aspects) < args.hub_count:
-                    niche_aspects.extend(aspect_themes)
+                # Ensure we have enough themes
+                while len(hub_themes) < args.hub_count:
+                    hub_themes.extend(hub_themes)  # Duplicate if needed
                 
                 hubs = []
                 for i in range(args.hub_count):
-                    hub_num = i + 1
-                    aspect = niche_aspects[i % len(niche_aspects)]
+                    theme = hub_themes[i % len(hub_themes)]
                     
                     # Create unique hub ID and label
-                    hub_id = f"{args.niche.lower().replace(' ', '-')}-{aspect}"
-                    hub_label = f"{args.niche.title()}: {aspect.title()}"
-                    hub_desc = f"Explore {aspect} aspects of {args.niche}. Learn about techniques, strategies, and best practices."
+                    hub_id = f"{args.niche.lower().replace(' ', '-')}-{slugify(theme)}"
+                    hub_label = f"{args.niche.title()}: {theme}"
+                    hub_desc = f"Explore {theme.lower()} for {args.niche}. Learn techniques, strategies, and best practices."
                     
-                    # Create diverse clusters for each hub
+                    # Create domain-appropriate clusters
                     clusters = []
-                    cluster_themes = ["basics", "advanced", "tools", "case-studies", "faqs"]
+                    if "animal" in args.niche.lower() or "bird" in args.niche.lower():
+                        cluster_themes = ["species-guide", "habitat-info", "behavior-patterns", "conservation-tips", "observation-techniques"]
+                    elif "nature" in args.niche.lower() or "environment" in args.niche.lower():
+                        cluster_themes = ["ecosystem-overview", "plant-identification", "conservation-methods", "field-guides", "sustainability-practices"]
+                    elif "photo" in args.niche.lower() or "camera" in args.niche.lower():
+                        cluster_themes = ["equipment-guides", "technique-tutorials", "composition-tips", "editing-workflows", "business-advice"]
+                    elif "outdoor" in args.niche.lower() or "hiking" in args.niche.lower():
+                        cluster_themes = ["gear-reviews", "safety-protocols", "navigation-skills", "trip-planning", "environmental-ethics"]
+                    else:
+                        cluster_themes = ["basics", "advanced-techniques", "tools-resources", "case-studies", "faqs"]
+                    
                     for j in range(min(args.clusters_per_hub, len(cluster_themes))):
                         cluster_theme = cluster_themes[j % len(cluster_themes)]
                         cluster_id = f"{hub_id}-{cluster_theme}"
-                        cluster_label = f"{aspect.title()} {cluster_theme.replace('-', ' ').title()}"
+                        cluster_label = f"{theme}: {cluster_theme.replace('-', ' ').title()}"
                         clusters.append({"id": cluster_id, "label": cluster_label})
                     
                     hubs.append({
@@ -468,7 +526,7 @@ def main():
                     })
                 
                 bp = {"family_label": family_label, "hubs": hubs}
-                print(f"Created enhanced niche-specific plan: {family_label} ({len(hubs)} hubs with diverse themes)")
+                print(f"Created domain-specific niche plan: {family_label} ({len(hubs)} hubs with {analysis.domain.name if 'analysis' in locals() else 'domain-aware'} themes)")
         else:
             # Use existing blueprint
             bp = BLUEPRINTS[family_id]
