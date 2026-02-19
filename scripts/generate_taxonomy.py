@@ -197,27 +197,49 @@ def main():
 
     # Generate new plan if requested
     elif args.generate_plan and args.niche:
-        try:
-            from plan_generator import generate_plan_contract
-            print(f"Generating plan for niche: {args.niche}")
-            plan = generate_plan_contract(
-                niche=args.niche,
-                hub_count=args.hub_count,
-                clusters_per_hub=args.clusters_per_hub,
-                pages_per_hub=args.pages_per_hub,
-                family_id=args.family if args.family else None
-            )
+        print(f"Generating plan for niche: {args.niche}")
+        
+        # Try to generate plan with retries
+        max_retries = 2
+        plan = None
+        last_error = None
+        
+        for attempt in range(max_retries + 1):
+            try:
+                from plan_generator import generate_plan_contract
+                plan = generate_plan_contract(
+                    niche=args.niche,
+                    hub_count=args.hub_count,
+                    clusters_per_hub=args.clusters_per_hub,
+                    pages_per_hub=args.pages_per_hub,
+                    family_id=args.family if args.family else None
+                )
+                
+                if plan is not None:
+                    break  # Success
+                    
+                last_error = "generate_plan_contract returned None"
+                if attempt < max_retries:
+                    print(f"  [Retry {attempt+1}/{max_retries}] Plan generation returned None, retrying...")
+                    
+            except ImportError as e:
+                last_error = f"Cannot import plan_generator: {e}"
+                print(f"  [Error] {last_error}")
+                break  # Can't retry import errors
+            except Exception as e:
+                last_error = str(e)
+                if attempt < max_retries:
+                    print(f"  [Retry {attempt+1}/{max_retries}] Plan generation failed: {e}, retrying...")
+                # Continue to next attempt
+        
+        if plan is not None:
             # Save the generated plan
             plan_path = Path("scripts") / "generated_plan.json"
             plan_path.parent.mkdir(parents=True, exist_ok=True)
             plan_path.write_text(json.dumps(plan, indent=2, ensure_ascii=False), encoding="utf-8")
             print(f"Plan generated and saved to {plan_path}")
-        except ImportError as e:
-            print(f"Cannot import plan_generator: {e}")
-            print("Falling back to blueprint-based generation")
-            plan = None
-        except Exception as e:
-            print(f"Failed to generate plan: {e}")
+        else:
+            print(f"Failed to generate plan after {max_retries + 1} attempts: {last_error}")
             print("Falling back to blueprint-based generation")
             plan = None
 
@@ -276,20 +298,37 @@ def main():
         # Handle "new-family" case - generate a custom plan
         if family_id == "new-family":
             print(f"No existing blueprint matches niche '{args.niche}'. Generating custom plan...")
-            try:
-                from plan_generator import generate_plan_contract
-                plan = generate_plan_contract(
-                    niche=args.niche,
-                    hub_count=args.hub_count,
-                    clusters_per_hub=args.clusters_per_hub,
-                    pages_per_hub=args.pages_per_hub,
-                    family_id="new-family"
-                )
-                
-                # Check if plan is None (generation failed)
-                if plan is None:
-                    raise ValueError("generate_plan_contract returned None")
-                
+            
+            # Try to generate plan with retries
+            max_retries = 2
+            plan = None
+            last_error = None
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    from plan_generator import generate_plan_contract
+                    plan = generate_plan_contract(
+                        niche=args.niche,
+                        hub_count=args.hub_count,
+                        clusters_per_hub=args.clusters_per_hub,
+                        pages_per_hub=args.pages_per_hub,
+                        family_id="new-family"
+                    )
+                    
+                    if plan is not None:
+                        break  # Success
+                        
+                    last_error = "generate_plan_contract returned None"
+                    if attempt < max_retries:
+                        print(f"  [Retry {attempt+1}/{max_retries}] Plan generation returned None, retrying...")
+                        
+                except Exception as e:
+                    last_error = str(e)
+                    if attempt < max_retries:
+                        print(f"  [Retry {attempt+1}/{max_retries}] Plan generation failed: {e}, retrying...")
+                    # Continue to next attempt
+            
+            if plan is not None:
                 # Use plan-based taxonomy
                 family_id = plan.get("family_id", "new-family")
                 family_label = plan.get("family_label", "Custom Family")
@@ -309,31 +348,66 @@ def main():
                 bp = {"family_label": family_label, "hubs": hubs}
                 print(f"Generated custom plan: {family_label} ({len(hubs)} hubs)")
                 
-            except (ImportError, ValueError, Exception) as e:
-                print(f"Failed to generate custom plan: {e}")
-                print("Creating minimal niche-specific plan instead of falling back to unrelated blueprint")
+            else:
+                # Plan generation failed even after retries
+                print(f"Failed to generate custom plan after {max_retries + 1} attempts: {last_error}")
+                print("Creating enhanced niche-specific plan with diverse hubs...")
                 
-                # Create a minimal niche-specific plan instead of using energy-efficiency
-                # This ensures we don't give wrong hubs for ocean/desert/underground niches
+                # Create an enhanced niche-specific plan with diverse hub names
                 family_id = "new-family"
                 family_label = f"Custom {args.niche.title()} Family"
                 
-                # Generate simple hub names based on niche
-                niche_words = args.niche.lower().split()
-                hub_base = niche_words[0] if niche_words else "topic"
+                # Generate diverse hub themes based on niche words and common aspects
+                niche_lower = args.niche.lower()
+                niche_words = niche_lower.split()
+                
+                # Common aspect themes for various niches
+                aspect_themes = [
+                    "fundamentals", "techniques", "strategies", "tools",
+                    "benefits", "challenges", "resources", "community",
+                    "innovation", "sustainability", "health", "safety",
+                    "design", "implementation", "maintenance", "optimization"
+                ]
+                
+                # Niche-specific aspect themes based on keywords
+                niche_aspects = []
+                if any(word in niche_lower for word in ["living", "lifestyle", "life"]):
+                    niche_aspects = ["home", "health", "community", "sustainability", "wellness", "family", "environment", "culture"]
+                elif any(word in niche_lower for word in ["tech", "digital", "software", "app"]):
+                    niche_aspects = ["tools", "techniques", "security", "productivity", "innovation", "automation", "integration", "development"]
+                elif any(word in niche_lower for word in ["energy", "power", "solar", "wind"]):
+                    niche_aspects = ["efficiency", "savings", "technology", "installation", "maintenance", "sustainability", "innovation", "safety"]
+                elif any(word in niche_lower for word in ["ocean", "marine", "sea", "water"]):
+                    niche_aspects = ["conservation", "exploration", "safety", "technology", "ecosystems", "recreation", "research", "sustainability"]
+                elif any(word in niche_lower for word in ["desert", "arid", "dry"]):
+                    niche_aspects = ["survival", "conservation", "ecology", "adaptation", "technology", "culture", "exploration", "sustainability"]
+                elif any(word in niche_lower for word in ["underground", "cave", "subterranean"]):
+                    niche_aspects = ["shelter", "safety", "exploration", "technology", "ecology", "conservation", "design", "sustainability"]
+                else:
+                    # Use generic aspects
+                    niche_aspects = aspect_themes[:args.hub_count]
+                
+                # Ensure we have enough aspects
+                while len(niche_aspects) < args.hub_count:
+                    niche_aspects.extend(aspect_themes)
                 
                 hubs = []
                 for i in range(args.hub_count):
                     hub_num = i + 1
-                    hub_id = f"{hub_base}-{hub_num}"
-                    hub_label = f"{args.niche.title()} {hub_num}: {hub_base.title()} Aspects"
-                    hub_desc = f"Explore various aspects of {args.niche} related to {hub_base}."
+                    aspect = niche_aspects[i % len(niche_aspects)]
                     
-                    # Create simple clusters
+                    # Create unique hub ID and label
+                    hub_id = f"{args.niche.lower().replace(' ', '-')}-{aspect}"
+                    hub_label = f"{args.niche.title()}: {aspect.title()}"
+                    hub_desc = f"Explore {aspect} aspects of {args.niche}. Learn about techniques, strategies, and best practices."
+                    
+                    # Create diverse clusters for each hub
                     clusters = []
-                    for j in range(min(args.clusters_per_hub, 3)):
-                        cluster_id = f"{hub_id}-cluster-{j+1}"
-                        cluster_label = f"{hub_base.title()} Cluster {j+1}"
+                    cluster_themes = ["basics", "advanced", "tools", "case-studies", "faqs"]
+                    for j in range(min(args.clusters_per_hub, len(cluster_themes))):
+                        cluster_theme = cluster_themes[j % len(cluster_themes)]
+                        cluster_id = f"{hub_id}-{cluster_theme}"
+                        cluster_label = f"{aspect.title()} {cluster_theme.replace('-', ' ').title()}"
                         clusters.append({"id": cluster_id, "label": cluster_label})
                     
                     hubs.append({
@@ -345,7 +419,7 @@ def main():
                     })
                 
                 bp = {"family_label": family_label, "hubs": hubs}
-                print(f"Created minimal niche-specific plan: {family_label} ({len(hubs)} hubs)")
+                print(f"Created enhanced niche-specific plan: {family_label} ({len(hubs)} hubs with diverse themes)")
         else:
             # Use existing blueprint
             bp = BLUEPRINTS[family_id]
