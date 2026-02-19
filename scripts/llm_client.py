@@ -138,16 +138,31 @@ def parse_json_strict_or_extract(raw: str) -> dict:
             return obj
         if isinstance(obj, list) and len(obj) == 1 and isinstance(obj[0], dict):
             return obj[0]
-        if not isinstance(obj, dict):
-            raise json.JSONDecodeError("Top-level JSON must be an object", cand, 0)
+        # If it's a list, wrap it in a dict with key "data"
+        if isinstance(obj, list):
+            return {"data": obj}
     except json.JSONDecodeError:
         pass
 
-    # Walk for the first balanced JSON object
+    # Walk for the first balanced JSON object or array
     s = cand
-    start = s.find("{")
-    if start == -1:
-        raise json.JSONDecodeError("No JSON object found", cand, 0)
+    start_obj = s.find("{")
+    start_arr = s.find("[")
+    
+    # Determine which comes first and what type we're looking for
+    if start_obj == -1 and start_arr == -1:
+        raise json.JSONDecodeError("No JSON object or array found", cand, 0)
+    
+    if start_obj != -1 and (start_arr == -1 or start_obj < start_arr):
+        # Looking for object
+        start = start_obj
+        open_char = "{"
+        close_char = "}"
+    else:
+        # Looking for array
+        start = start_arr
+        open_char = "["
+        close_char = "]"
 
     depth = 0
     in_str = False
@@ -166,21 +181,27 @@ def parse_json_strict_or_extract(raw: str) -> dict:
         if ch == '"':
             in_str = True
             continue
-        if ch == "{":
+        if ch == open_char:
             depth += 1
-        elif ch == "}":
+        elif ch == close_char:
             depth -= 1
             if depth == 0:
                 end = i + 1
                 break
 
     if end is None:
-        raise json.JSONDecodeError("JSON object appears truncated (missing closing brace)", cand, 0)
+        raise json.JSONDecodeError(f"JSON {open_char}{close_char} appears truncated (missing closing {close_char})", cand, 0)
 
     snippet = _strip_fences(s[start:end])
     obj = json.loads(snippet)
+    
+    # Handle arrays by wrapping in dict
+    if isinstance(obj, list):
+        return {"data": obj}
+    
     if not isinstance(obj, dict):
-        raise json.JSONDecodeError("Top-level JSON must be an object", snippet, 0)
+        raise json.JSONDecodeError("Top-level JSON must be an object or array", snippet, 0)
+    
     return obj
 
 
@@ -260,10 +281,16 @@ def llm_json(system: str, user: str, temperature: float = None, max_tokens: int 
 
     def _gemini_request_payload() -> tuple:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+        # Combine system and user with STRONG JSON-only instructions
         prompt = (
             system.strip()
             + "\n\n"
-            + "CRITICAL: Output MUST be a single valid JSON object. No markdown. No code fences. No commentary.\n"
+            + "CRITICAL INSTRUCTIONS:\n"
+            + "1. Output MUST be a single valid JSON object or array ONLY\n"
+            + "2. DO NOT include any explanatory text, markdown, code fences, or commentary\n"
+            + "3. DO NOT say 'Here is the JSON requested:' or similar phrases\n"
+            + "4. The response must begin with either '{' or '[' and end with '}' or ']'\n"
+            + "5. No other text before or after the JSON\n\n"
             + user.strip()
         )
         payload = {
@@ -272,7 +299,7 @@ def llm_json(system: str, user: str, temperature: float = None, max_tokens: int 
                 "temperature": float(temp),
                 "maxOutputTokens": int(max_tokens),
                 "responseMimeType": "application/json",
-                "stopSequences": ["```"],  # Prevent markdown fences
+                "stopSequences": ["```", "Here is", "The JSON", "Below is", "I'll provide"],  # Prevent explanatory text
                 "thinkingConfig": {"thinkingBudget": 0},
             },
         }
@@ -285,13 +312,21 @@ def llm_json(system: str, user: str, temperature: float = None, max_tokens: int 
     def _moonshot_request_payload() -> tuple:
         url = f"{MOONSHOT_BASE_URL}/chat/completions"
         headers = {"Authorization": f"Bearer {MOONSHOT_API_KEY}", "Content-Type": "application/json"}
+        # Enhanced system prompt for JSON-only output
+        enhanced_system = (
+            system.strip()
+            + "\n\nCRITICAL: You must output ONLY a valid JSON object or array. "
+            + "Do not include any explanatory text, markdown, code fences, or commentary. "
+            + "Do not say 'Here is the JSON requested:' or similar phrases. "
+            + "The response must begin with either '{' or '[' and end with '}' or ']'."
+        )
         payload = {
             "model": MOONSHOT_MODEL,
             "temperature": int(temp) if isinstance(temp, (int, float)) and int(temp) == 1 else float(temp),
             "max_tokens": int(max_tokens),
             "response_format": {"type": "json_object"},
             "messages": [
-                {"role": "system", "content": system},
+                {"role": "system", "content": enhanced_system},
                 {"role": "user", "content": user},
             ],
         }
