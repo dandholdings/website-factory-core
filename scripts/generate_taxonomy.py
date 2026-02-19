@@ -435,6 +435,30 @@ def main():
                 used_ids = {hh["id"] for hh in bp["hubs"][:args.hub_count]}
                 hub["related_hubs"] = [r for r in hub.get("related_hubs", []) if r in used_ids][:3]
                 hubs.append(hub)
+    # Apply Concrete Intent Validator (CIV) to ensure concrete, high-intent titles
+    try:
+        from concrete_intent_validator import validate_hub_structure
+        site_root = Path.cwd()
+        validated_hubs, civ_warnings = validate_hub_structure(hubs, args.niche, site_root)
+        
+        if civ_warnings:
+            print(f"⚠️  CIV warnings ({len(civ_warnings)}):")
+            for warning in civ_warnings[:5]:  # Show first 5 warnings
+                print(f"   - {warning}")
+            if len(civ_warnings) > 5:
+                print(f"   ... and {len(civ_warnings) - 5} more warnings")
+            
+            # Use validated hubs
+            hubs = validated_hubs
+            print(f"✅ Applied CIV validation: {len(hubs)} hubs now have concrete, high-intent titles")
+        else:
+            print("✅ All hub and cluster titles passed CIV validation")
+            
+    except ImportError as e:
+        print(f"⚠️  CIV not available: {e}. Proceeding without concrete intent validation.")
+    except Exception as e:
+        print(f"⚠️  CIV validation failed: {e}. Proceeding without concrete intent validation.")
+
     # Update site.yaml
     if "taxonomy" not in cfg:
         cfg["taxonomy"] = {}

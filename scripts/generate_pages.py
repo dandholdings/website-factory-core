@@ -1614,6 +1614,47 @@ def main():
     else:
         titles = load_titles()
         hub_map = load_titles_with_hubs()
+        
+        # Apply Concrete Intent Validator (CIV) to ensure concrete, high-intent titles
+        try:
+            from concrete_intent_validator import enforce_concrete_titles
+            
+            # Get niche from environment or config
+            niche = (os.getenv("BOOTSTRAP_NICHE", "") or os.getenv("NICHE", "")).strip()
+            if not niche:
+                # Try to get niche from site config
+                site_cfg = load_yaml(site_cfg_path)
+                niche = site_cfg.get("niche", "").strip()
+            
+            if niche and titles:
+                site_root = Path.cwd()
+                validated_titles = enforce_concrete_titles(titles, niche, site_root)
+                
+                # Check if any titles were rewritten
+                original_count = len(titles)
+                validated_count = len(validated_titles)
+                rewritten_count = sum(1 for i in range(min(original_count, validated_count))
+                                    if titles[i] != validated_titles[i])
+                
+                if rewritten_count > 0:
+                    print(f"✅ Applied CIV validation: {rewritten_count}/{original_count} titles rewritten for concrete intent")
+                    # Show examples of rewritten titles
+                    print(f"   Examples of CIV improvements:")
+                    for i in range(min(3, rewritten_count)):
+                        if i < len(titles) and i < len(validated_titles) and titles[i] != validated_titles[i]:
+                            print(f"     - '{titles[i]}' → '{validated_titles[i]}'")
+                    
+                    titles = validated_titles
+                else:
+                    print(f"✅ All {original_count} titles passed CIV validation")
+            else:
+                print(f"⚠️  CIV: No niche found or no titles to validate")
+                
+        except ImportError as e:
+            print(f"⚠️  CIV not available: {e}. Proceeding without concrete intent validation.")
+        except Exception as e:
+            print(f"⚠️  CIV validation failed: {e}. Proceeding without concrete intent validation.")
+        
         random.shuffle(titles)
 
     if not titles:
