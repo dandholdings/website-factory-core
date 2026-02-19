@@ -315,7 +315,7 @@ class NounBankGenerator:
         """
         # Import here to avoid circular imports
         try:
-            from llm_client import llm_json
+            from llm_client import llm_json, parse_json_strict_or_extract
         except ImportError:
             # Fallback for testing
             logger.warning("llm_client not available, using mock noun bank")
@@ -323,7 +323,7 @@ class NounBankGenerator:
         
         prompt = f"""
         Generate a list of 50-80 concrete nouns and noun phrases for the niche "{niche}"{f" with focus on hub: {hub}" if hub else ""}{f" and cluster: {cluster}" if cluster else ""}.
-        
+
         Requirements:
         1. Only concrete, tangible, measurable nouns (tools, objects, devices, materials, products, services, techniques, methods)
         2. No abstract concepts (mindset, journey, awareness, transformation, ecosystem)
@@ -331,37 +331,73 @@ class NounBankGenerator:
         4. Include domain-specific terminology
         5. Include both single words and short phrases (2-3 words max)
         6. Prioritize high-intent, problem-solving nouns
-        
-        Format as a JSON array of strings.
+
+        IMPORTANT: Return ONLY a JSON array of strings. Do not include any explanatory text, markdown, or code fences.
         Example for "home energy efficiency":
         ["solar panels", "insulation", "thermostat", "LED bulbs", "heat pump", "energy audit", "window film", "weather stripping", "power strip", "smart meter"]
         """
         
-        try:
-            response = llm_json(
-                system="You are a domain expert generating concrete noun lists for content generation.",
-                user=prompt,
-                temperature=0.3
-            )
-            
-            if isinstance(response, dict) and "nouns" in response:
-                nouns = response["nouns"]
-            elif isinstance(response, list):
-                nouns = response
-            else:
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                response = llm_json(
+                    system="You are a domain expert generating concrete noun lists for content generation. Return ONLY JSON array, no other text.",
+                    user=prompt,
+                    temperature=0.7
+                )
+                
+                # Handle different response formats
                 nouns = []
-            
-            # Filter and clean nouns
-            filtered_nouns = self._filter_nouns(nouns)
-            
-            # Save to cache
-            self._save_noun_bank(niche, hub, cluster, filtered_nouns)
-            
-            return set(filtered_nouns)
-            
-        except Exception as e:
-            logger.error(f"Failed to generate noun bank: {e}")
-            return self._fallback_noun_bank(niche, hub, cluster)
+                if isinstance(response, dict):
+                    # Try to extract nouns from various possible keys
+                    for key in ["nouns", "items", "list", "array", "result", "data", "response"]:
+                        if key in response and isinstance(response[key], list):
+                            nouns = response[key]
+                            break
+                elif isinstance(response, list):
+                    nouns = response
+                elif isinstance(response, str):
+                    # Try to parse the string as JSON
+                    try:
+                        parsed = parse_json_strict_or_extract(response)
+                        if isinstance(parsed, dict):
+                            for key in ["nouns", "items", "list", "array", "result", "data", "response"]:
+                                if key in parsed and isinstance(parsed[key], list):
+                                    nouns = parsed[key]
+                                    break
+                        elif isinstance(parsed, list):
+                            nouns = parsed
+                    except:
+                        # If parsing fails, try to extract array from text
+                        import re
+                        # Look for JSON array pattern
+                        array_match = re.search(r'\[.*\]', response, re.DOTALL)
+                        if array_match:
+                            try:
+                                nouns = json.loads(array_match.group(0))
+                            except:
+                                pass
+                
+                # Filter and clean nouns
+                if nouns:
+                    filtered_nouns = self._filter_nouns(nouns)
+                    
+                    # Save to cache
+                    self._save_noun_bank(niche, hub, cluster, filtered_nouns)
+                    
+                    return set(filtered_nouns)
+                
+                logger.warning(f"Attempt {attempt + 1}/{max_attempts}: No valid nouns extracted from LLM response")
+                
+            except Exception as e:
+                logger.warning(f"Attempt {attempt + 1}/{max_attempts}: LLM noun bank generation failed: {e}")
+                if attempt < max_attempts - 1:
+                    import time
+                    time.sleep(1.0 * (attempt + 1))  # Exponential backoff
+        
+        # All attempts failed, use mock noun bank
+        logger.warning(f"All {max_attempts} attempts failed for noun bank generation, using mock noun bank")
+        return self._mock_noun_bank(niche, hub, cluster)
     
     def _filter_nouns(self, nouns: List[str]) -> List[str]:
         """Filter noun list to remove duplicates, abstracts, etc."""
