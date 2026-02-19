@@ -1,0 +1,364 @@
+#!/usr/bin/env python3
+"""
+plan_generator.py — Generate a complete taxonomy plan contract for a niche.
+
+This implements the "single plan contract" approach:
+1. Takes niche, hub_count, clusters_per_hub, pages_per_hub as inputs
+2. Generates a complete plan with strict JSON schema
+3. Includes ontology, blueprint/family selection, hubs, clusters, pages
+4. Validates and repairs JSON deterministically
+5. Outputs plan.json for downstream steps
+"""
+
+import argparse
+import json
+import re
+import sys
+import os
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+import yaml
+
+# Allow running from thin-repo or core
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR))
+
+from llm_client import llm_json, parse_json_strict_or_extract, safe_write_llm_dump
+from taxonomy_blueprints import select_blueprint, BLUEPRINTS, FAMILY_KEYWORDS
+
+
+def json_repair(raw_text: str) -> Dict[str, Any]:
+    """Repair invalid JSON deterministically.
+    
+    Steps:
+    1. Strip leading/trailing junk
+    2. Find first '{' and last '}'
+    3. Attempt json.loads
+    4. If failure, run repair LLM prompt
+    5. Retry parse
+    """
+    # Step 1: Strip junk
+    cleaned = raw_text.strip()
+    
+    # Step 2: Find JSON boundaries
+    start = cleaned.find('{')
+    end = cleaned.rfind('}')
+    
+    if start == -1 or end == -1 or end <= start:
+        # No JSON found, try repair
+        return _repair_with_llm(cleaned)
+    
+    json_str = cleaned[start:end+1]
+    
+    # Step 3: Attempt parse
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError as e:
+        # Step 4: Repair with LLM
+        repaired = _repair_with_llm(json_str)
+        if repaired:
+            return repaired
+        raise RuntimeError(f"Failed to repair JSON: {e}")
+
+
+def _repair_with_llm(broken_json: str) -> Dict[str, Any]:
+    """Use LLM to repair JSON syntax only, without altering content."""
+    system = """You are a JSON syntax repair assistant. Fix ONLY the JSON syntax errors.
+Do NOT change the content, values, or structure. Only fix:
+- Missing or extra commas
+- Unclosed quotes
+- Unclosed brackets or braces
+- Trailing commas
+- Invalid escape sequences
+- Unterminated strings
+
+Return ONLY the repaired JSON string, no commentary, no markdown fences."""
+    
+    try:
+        response = llm_json(
+            system=system,
+            user=f"Repair this JSON:\n\n{broken_json}",
+            temperature=0.1,
+            max_tokens=len(broken_json) + 500
+        )
+        
+        if isinstance(response, dict) and "repaired_json" in response:
+            repaired = response["repaired_json"]
+        else:
+            # Try to extract JSON from response
+            repaired = str(response)
+        
+        # Clean up
+        repaired = repaired.strip()
+        if repaired.startswith('```json'):
+            repaired = repaired[7:]
+        if repaired.startswith('```'):
+            repaired = repaired[3:]
+        if repaired.endswith('```'):
+            repaired = repaired[:-3]
+        repaired = repaired.strip()
+        
+        return json.loads(repaired)
+    except Exception as e:
+        # Save failure for debugging
+        debug_dir = Path("scripts") / "_logs" / "json_repair"
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        debug_file = debug_dir / f"repair_failure_{int(time.time())}.txt"
+        debug_file.write_text(f"Original: {broken_json}\n\nError: {e}", encoding="utf-8")
+        raise
+
+
+def validate_plan_schema(plan: Dict[str, Any]) -> List[str]:
+    """Validate plan against required schema."""
+    errors = []
+    
+    # Required top-level keys
+    required_keys = ["niche", "family_id", "family_label", "hubs", "ontology"]
+    for key in required_keys:
+        if key not in plan:
+            errors.append(f"Missing required key: {key}")
+    
+    # Validate hub count matches
+    if "hubs" in plan:
+        hubs = plan["hubs"]
+        if not isinstance(hubs, list):
+            errors.append("hubs must be a list")
+        else:
+            for i, hub in enumerate(hubs):
+                if not isinstance(hub, dict):
+                    errors.append(f"Hub {i} must be a dict")
+                    continue
+                
+                hub_required = ["id", "label", "description", "clusters", "pages"]
+                for key in hub_required:
+                    if key not in hub:
+                        errors.append(f"Hub {i} missing key: {key}")
+                
+                # Validate clusters
+                if "clusters" in hub and isinstance(hub["clusters"], list):
+                    for j, cluster in enumerate(hub["clusters"]):
+                        if not isinstance(cluster, dict):
+                            errors.append(f"Hub {i} cluster {j} must be a dict")
+                        elif "id" not in cluster or "label" not in cluster:
+                            errors.append(f"Hub {i} cluster {j} missing id or label")
+                
+                # Validate pages
+                if "pages" in hub and isinstance(hub["pages"], list):
+                    for j, page in enumerate(hub["pages"]):
+                        if not isinstance(page, dict):
+                            errors.append(f"Hub {i} page {j} must be a dict")
+                            continue
+                        
+                        page_required = ["title", "slug", "page_type", "internal_links"]
+                        for key in page_required:
+                            if key not in page:
+                                errors.append(f"Hub {i} page {j} missing key: {key}")
+                        
+                        # Validate page_type
+                        if "page_type" in page:
+                            valid_types = ["explainer", "howto", "checklist", "comparison", 
+                                         "troubleshooting", "guide", "reference"]
+                            if page["page_type"] not in valid_types:
+                                errors.append(f"Hub {i} page {j} invalid page_type: {page['page_type']}")
+    
+    # Validate ontology
+    if "ontology" in plan and isinstance(plan["ontology"], dict):
+        ontology = plan["ontology"]
+        if "core_keywords" not in ontology or not isinstance(ontology["core_keywords"], list):
+            errors.append("ontology.core_keywords must be a list")
+        if "not_allowed_domains" not in ontology or not isinstance(ontology["not_allowed_domains"], list):
+            errors.append("ontology.not_allowed_domains must be a list")
+    
+    return errors
+
+
+def generate_plan_contract(
+    niche: str,
+    hub_count: int = 8,
+    clusters_per_hub: int = 5,
+    pages_per_hub: int = 3,
+    family_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """Generate a complete taxonomy plan contract.
+    
+    Returns a dict with the complete plan including:
+    - niche ontology
+    - blueprint/family selection (or creation)
+    - hubs with clusters and pages
+    - internal links
+    - not_allowed domains
+    """
+    
+    # Determine family
+    if not family_id:
+        family_id = select_blueprint(niche)
+    
+    # Get family keywords for relevance check
+    family_keywords = FAMILY_KEYWORDS.get(family_id, [])
+    niche_lower = niche.lower()
+    
+    # Calculate keyword overlap
+    overlap_score = 0
+    for kw in family_keywords:
+        if kw in niche_lower:
+            overlap_score += 1
+    
+    # If low overlap, consider creating new family
+    if overlap_score < 2 and family_id != "new-family":
+        # Check if we should force new family
+        family_id = "new-family"
+    
+    # Build system prompt for plan generation
+    system = """You are a taxonomy planning expert. Generate a complete website taxonomy plan.
+
+REQUIRED OUTPUT FORMAT (strict JSON):
+{
+  "niche": "exact niche string provided",
+  "family_id": "family identifier (e.g., 'energy-efficiency', 'home-systems', or 'new-family')",
+  "family_label": "Human-readable family name",
+  "ontology": {
+    "core_keywords": ["list", "of", "core", "keywords", "relevant", "to", "niche"],
+    "not_allowed_domains": ["list", "of", "domain", "keywords", "to", "avoid"]
+  },
+  "hubs": [
+    {
+      "id": "slug-identifier",
+      "label": "Human-readable hub name",
+      "description": "2-3 sentence description of this hub's focus",
+      "clusters": [
+        {"id": "cluster-slug", "label": "Cluster label"},
+        ... (clusters_per_hub total)
+      ],
+      "pages": [
+        {
+          "title": "Page title",
+          "slug": "page-slug",
+          "page_type": "explainer|howto|checklist|comparison|troubleshooting|guide|reference",
+          "internal_links": ["slug1", "slug2", ...]  # links to other pages in same plan
+        },
+        ... (pages_per_hub total)
+      ]
+    },
+    ... (hub_count total)
+  ]
+}
+
+RULES:
+1. All hubs MUST be strictly relevant to the niche. No drift.
+2. Each page MUST have a page_type from the allowed list.
+3. Internal links MUST reference slugs that exist in this plan.
+4. Not_allowed_domains should include topics completely unrelated to the niche.
+5. If family_id is 'new-family', create a new coherent family appropriate for the niche.
+6. Ensure no duplicate titles or slugs.
+7. Clusters should be sub-topics within each hub.
+8. Pages should cover specific aspects of hub/cluster topics.
+
+Return ONLY the JSON object. No markdown, no commentary."""
+    
+    user = f"""Generate a taxonomy plan for: {niche}
+
+Parameters:
+- Hub count: {hub_count}
+- Clusters per hub: {clusters_per_hub}
+- Pages per hub: {pages_per_hub}
+- Family ID: {family_id}
+
+Ensure all content stays strictly relevant to "{niche}". Avoid any domain drift."""
+    
+    # Generate plan with low temperature for consistency
+    try:
+        plan = llm_json(
+            system=system,
+            user=user,
+            temperature=0.25,
+            max_tokens=8000
+        )
+        
+        # Validate the plan
+        errors = validate_plan_schema(plan)
+        if errors:
+            raise ValueError(f"Plan validation failed: {'; '.join(errors)}")
+        
+        # Ensure counts match
+        if len(plan.get("hubs", [])) != hub_count:
+            raise ValueError(f"Hub count mismatch: requested {hub_count}, got {len(plan.get('hubs', []))}")
+        
+        return plan
+        
+    except Exception as e:
+        # Save debug info
+        debug_dir = Path("scripts") / "_logs" / "plan_generation"
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        debug_file = debug_dir / f"plan_failure_{int(time.time())}.txt"
+        debug_file.write_text(f"Niche: {niche}\nError: {e}", encoding="utf-8")
+        raise
+
+
+def save_plan(plan: Dict[str, Any], output_path: Path) -> None:
+    """Save plan to JSON file with receipt."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    receipt = {
+        "generated_at": time.time(),
+        "niche": plan.get("niche", ""),
+        "family_id": plan.get("family_id", ""),
+        "hub_count": len(plan.get("hubs", [])),
+        "plan": plan
+    }
+    
+    output_path.write_text(json.dumps(receipt, indent=2), encoding="utf-8")
+
+
+def load_plan(plan_path: Path) -> Dict[str, Any]:
+    """Load plan from JSON file."""
+    if not plan_path.exists():
+        raise FileNotFoundError(f"Plan file not found: {plan_path}")
+    
+    data = json.loads(plan_path.read_text(encoding="utf-8"))
+    if "plan" in data:
+        return data["plan"]
+    return data
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate taxonomy plan contract")
+    parser.add_argument("--niche", required=True, help="Niche/topic for the site")
+    parser.add_argument("--hub-count", type=int, default=8, help="Number of hubs to generate")
+    parser.add_argument("--clusters-per-hub", type=int, default=5, help="Clusters per hub")
+    parser.add_argument("--pages-per-hub", type=int, default=3, help="Pages per hub")
+    parser.add_argument("--family", help="Force specific family ID")
+    parser.add_argument("--output", default="plan.json", help="Output JSON file path")
+    parser.add_argument("--force", action="store_true", help="Overwrite existing plan")
+    
+    args = parser.parse_args()
+    
+    output_path = Path(args.output)
+    if output_path.exists() and not args.force:
+        print(f"Plan already exists at {output_path}. Use --force to overwrite.")
+        sys.exit(1)
+    
+    try:
+        print(f"Generating plan for niche: {args.niche}")
+        print(f"Hub count: {args.hub_count}, Clusters per hub: {args.clusters_per_hub}, Pages per hub: {args.pages_per_hub}")
+        
+        plan = generate_plan_contract(
+            niche=args.niche,
+            hub_count=args.hub_count,
+            clusters_per_hub=args.clusters_per_hub,
+            pages_per_hub=args.pages_per_hub,
+            family_id=args.family
+        )
+        
+        save_plan(plan, output_path)
+        print(f"Plan generated successfully: {output_path}")
+        print(f"Family: {plan.get('family_id')} ({plan.get('family_label')})")
+        print(f"Hubs: {len(plan.get('hubs', []))}")
+        
+    except Exception as e:
+        print(f"Failed to generate plan: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    import time
+    main()

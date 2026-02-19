@@ -26,9 +26,6 @@ from pathlib import Path
 import requests
 import yaml
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
 # --- Config ---
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
@@ -73,98 +70,21 @@ def write_markdown(fm: dict, body: str) -> str:
     return f"---\n{fm_str}\n---\n\n{body}\n"
 
 
-def repair_json_response(raw_text: str) -> dict:
-    """Robust JSON repair with multiple fallback strategies.
-    
-    Fixes common issues:
-    - Unclosed quotes
-    - Missing commas
-    - Trailing commas
-    - Markdown fences
-    - Truncated JSON
-    """
-    import json
-    import re
-    
-    # Clean markdown fences
-    cleaned = re.sub(r'^```(?:json)?\s*', '', raw_text.strip())
-    cleaned = re.sub(r'\s*```\s*$', '', cleaned)
-    
-    # Try direct parse first
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError as e:
-        error_msg = str(e)
-        print(f"  JSON parse error: {error_msg}")
-    
-    # Simple repairs
-    lines = cleaned.split('\n')
-    
-    # Fix unclosed quotes
-    for i, line in enumerate(lines):
-        if line.count('"') % 2 == 1:
-            lines[i] = line + '"'
-    
-    repaired = '\n'.join(lines)
-    
-    # Fix trailing commas before } or ]
-    repaired = re.sub(r',\s*([}\]])', r'\1', repaired)
-    
-    # Fix missing commas between objects in arrays
-    repaired = re.sub(r'"\s*"', '", "', repaired)
-    
-    # Try repaired version
-    try:
-        return json.loads(repaired)
-    except json.JSONDecodeError:
-        pass
-    
-    # Fallback: extract JSON object between first { and last }
-    start = repaired.find('{')
-    end = repaired.rfind('}')
-    if start != -1 and end > start:
-        try:
-            return json.loads(repaired[start:end+1])
-        except:
-            pass
-    
-    # Ultimate fallback: return minimal valid structure
-    print("  WARNING: JSON repair failed, returning minimal structure")
-    return {
-        "hub_intro_markdown": f"Content generation failed for this hub. Please regenerate.",
-        "clusters": [],
-        "faqs": []
-    }
-
-
 def call_gemini(system: str, user: str) -> dict:
-    """Call Gemini API and return parsed JSON with robust repair."""
+    """Call Gemini API and return parsed JSON."""
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY not set")
-
-    # Import the robust JSON parser
-    try:
-        from llm_client import parse_json_strict_or_extract
-    except ImportError:
-        # Fallback to local repair function
-        parse_json_strict_or_extract = repair_json_response
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
     payload = {
         "contents": [{"role": "user", "parts": [{"text": user}]}],
         "systemInstruction": {"parts": [{"text": system}]},
         "generationConfig": {
-            "temperature": 0.7,  # Increased for better creativity while maintaining structure
+            "temperature": 0.25,  # Lower temperature for more deterministic JSON
             "maxOutputTokens": 4096,
-            # Removed responseMimeType to avoid empty responses
-            "stopSequences": ["```", "Here is the JSON"]  # Prevent explanatory text
+            "responseMimeType": "application/json",
+            "stopSequences": ["```"]  # Prevent markdown fences
         },
-        "safetySettings": [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-        ]
     }
     headers = {"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"}
 
@@ -184,14 +104,17 @@ def call_gemini(system: str, user: str) -> dict:
                 for p in c.get("content", {}).get("parts", []):
                     text += p.get("text", "")
 
-            # Use robust JSON parser
-            try:
-                return parse_json_strict_or_extract(text)
-            except Exception as parse_error:
-                print(f"  JSON parse failed: {parse_error}")
-                # Fallback to local repair
-                return repair_json_response(text)
+            # Clean and parse JSON
+            text = text.strip()
+            text = re.sub(r"^```(?:json)?\s*", "", text)
+            text = re.sub(r"\s*```\s*$", "", text)
+            return json.loads(text)
 
+        except json.JSONDecodeError as e:
+            print(f"  JSON parse error (attempt {attempt+1}): {e}")
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(2)
+            continue
         except Exception as e:
             print(f"  API error (attempt {attempt+1}): {e}")
             if attempt < MAX_RETRIES - 1:

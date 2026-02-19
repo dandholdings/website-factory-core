@@ -53,10 +53,10 @@ HTTP_MAX_TRIES = _safe_int(os.getenv("HTTP_MAX_TRIES") or os.getenv("KIMI_HTTP_M
 BACKOFF_BASE = float(os.getenv("BACKOFF_BASE", os.getenv("KIMI_BACKOFF_BASE", "1.7")) or "1.7")
 
 try:
-    _t_raw = os.getenv("TEMPERATURE", "0.7").strip()  # Higher default for more creative responses
+    _t_raw = os.getenv("TEMPERATURE", "0.25").strip()  # Lower default for more deterministic JSON
     TEMPERATURE = float(_t_raw)
 except Exception:
-    TEMPERATURE = 0.7
+    TEMPERATURE = 0.25
 
 # Only force temperature=1 for Moonshot/Kimi (legacy constraint).
 if PROVIDER == "moonshot" and TEMPERATURE != 1:
@@ -108,221 +108,80 @@ def apply_site_root_early():
 
 
 # --- JSON parsing ---------------------------------------------------------
-def parse_json_strict_or_extract(raw: str, context: str = "", max_retries: int = 3) -> dict:
-    """
-    Parse a JSON object from model output with strict validation, error logging, and retry logic.
-    
-    Args:
-        raw: Raw text from LLM response
-        context: Context for error logging (e.g., "hub_fill", "page_generation")
-        max_retries: Maximum number of retry attempts for JSON repair
-        
-    Returns:
-        Parsed JSON dictionary
-        
-    Raises:
-        json.JSONDecodeError: If JSON cannot be parsed after all retries
-    """
-    import logging
-    logger = logging.getLogger(__name__)
-    
+def parse_json_strict_or_extract(raw: str) -> dict:
+    """Parse a JSON object from model output. Robust against fences, prose, truncation."""
     if raw is None:
         raw = ""
 
     if isinstance(raw, (dict, list)):
         try:
             return raw if isinstance(raw, dict) else (raw[0] if raw and isinstance(raw[0], dict) else json.loads(json.dumps(raw)))
-        except Exception as e:
-            logger.warning(f"Failed to convert raw object to dict: {e}")
+        except Exception:
             raw = json.dumps(raw)
 
     raw = str(raw).replace("\ufeff", "").replace("\x00", "").strip()
 
     if not raw:
-        error_msg = f"Empty model output for context: {context}"
-        logger.error(error_msg)
-        raise json.JSONDecodeError(error_msg, raw, 0)
+        raise json.JSONDecodeError("Empty model output", raw, 0)
 
     def _strip_fences(s: str) -> str:
         s2 = re.sub(r"^```(?:json)?\s*", "", s.strip(), flags=re.I)
         s2 = re.sub(r"\s*```\s*$", "", s2.strip())
         return s2.strip()
 
-    def _log_json_error(attempt: int, error: str, raw_snippet: str = ""):
-        """Log JSON parsing errors with context."""
-        snippet_preview = raw_snippet[:200] + "..." if len(raw_snippet) > 200 else raw_snippet
-        logger.error(
-            f"JSON parse error (attempt {attempt}/{max_retries}) for {context}: {error}\n"
-            f"Raw snippet: {snippet_preview}"
-        )
-
-    def _attempt_json_parse(candidate: str, attempt: int = 1) -> Optional[dict]:
-        """Attempt to parse JSON with various strategies."""
-        strategies = [
-            ("direct_parse", lambda: json.loads(candidate)),
-            ("balanced_extract", lambda: _extract_balanced_json(candidate)),
-            ("repair_missing_braces", lambda: _repair_missing_braces(candidate)),
-            ("repair_trailing_commas", lambda: _repair_trailing_commas(candidate)),
-            ("extract_with_regex", lambda: _extract_json_with_regex(candidate)),
-        ]
-        
-        for strategy_name, parse_func in strategies:
-            try:
-                obj = parse_func()
-                if isinstance(obj, dict):
-                    logger.debug(f"JSON parsed successfully with strategy '{strategy_name}' (attempt {attempt})")
-                    return obj
-                if isinstance(obj, list) and len(obj) == 1 and isinstance(obj[0], dict):
-                    logger.debug(f"JSON array with single dict parsed with strategy '{strategy_name}' (attempt {attempt})")
-                    return obj[0]
-                if isinstance(obj, list):
-                    logger.debug(f"JSON array wrapped in dict with strategy '{strategy_name}' (attempt {attempt})")
-                    return {"data": obj}
-            except Exception as e:
-                logger.debug(f"Strategy '{strategy_name}' failed: {e}")
-                continue
-        
-        return None
-
-    def _extract_balanced_json(s: str) -> dict:
-        """Extract first balanced JSON object or array from text."""
-        start_obj = s.find("{")
-        start_arr = s.find("[")
-        
-        if start_obj == -1 and start_arr == -1:
-            raise json.JSONDecodeError("No JSON object or array found", s, 0)
-        
-        if start_obj != -1 and (start_arr == -1 or start_obj < start_arr):
-            start = start_obj
-            open_char = "{"
-            close_char = "}"
-        else:
-            start = start_arr
-            open_char = "["
-            close_char = "]"
-
-        depth = 0
-        in_str = False
-        esc = False
-        end = None
-        for i in range(start, len(s)):
-            ch = s[i]
-            if in_str:
-                if esc:
-                    esc = False
-                elif ch == "\\":
-                    esc = True
-                elif ch == '"':
-                    in_str = False
-                continue
-            if ch == '"':
-                in_str = True
-                continue
-            if ch == open_char:
-                depth += 1
-            elif ch == close_char:
-                depth -= 1
-                if depth == 0:
-                    end = i + 1
-                    break
-
-        if end is None:
-            raise json.JSONDecodeError(f"JSON {open_char}{close_char} appears truncated", s, 0)
-
-        snippet = _strip_fences(s[start:end])
-        return json.loads(snippet)
-
-    def _repair_missing_braces(s: str) -> dict:
-        """Repair JSON with missing closing braces/brackets."""
-        # Count opening vs closing braces
-        open_braces = s.count("{")
-        close_braces = s.count("}")
-        open_brackets = s.count("[")
-        close_brackets = s.count("]")
-        
-        # Add missing closing braces
-        if open_braces > close_braces:
-            s += "}" * (open_braces - close_braces)
-        
-        # Add missing closing brackets
-        if open_brackets > close_brackets:
-            s += "]" * (open_brackets - close_brackets)
-        
-        # Try to parse repaired JSON
-        return json.loads(s)
-
-    def _repair_trailing_commas(s: str) -> dict:
-        """Repair JSON with trailing commas."""
-        # Remove trailing commas before closing braces/brackets
-        s = re.sub(r',\s*([}\]])', r'\1', s)
-        # Remove trailing commas in arrays/objects
-        s = re.sub(r',\s*,', ',', s)
-        return json.loads(s)
-
-    def _extract_json_with_regex(s: str) -> dict:
-        """Extract JSON using regex patterns."""
-        # Try to find JSON object
-        json_obj_pattern = r'\{[^{}]*\}(?:\s*,\s*\{[^{}]*\})*'
-        match = re.search(json_obj_pattern, s, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(0))
-            except:
-                pass
-        
-        # Try to find JSON array
-        json_arr_pattern = r'\[[^\[\]]*\](?:\s*,\s*\[[^\[\]]*\])*'
-        match = re.search(json_arr_pattern, s, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(0))
-            except:
-                pass
-        
-        raise json.JSONDecodeError("No JSON found with regex patterns", s, 0)
-
-    # Main parsing loop with retries
     cand = _strip_fences(raw)
-    last_error = None
-    
-    for attempt in range(1, max_retries + 1):
-        try:
-            obj = _attempt_json_parse(cand, attempt)
-            if obj:
-                # Validate basic JSON structure
-                if not isinstance(obj, dict):
-                    obj = {"data": obj}
-                
-                # Log success
-                logger.info(f"JSON parsed successfully for {context} (attempt {attempt})")
-                return obj
-        except Exception as e:
-            last_error = e
-            _log_json_error(attempt, str(e), cand[:500])
-            
-            # On last attempt, try one more aggressive repair
-            if attempt == max_retries:
-                logger.warning(f"All JSON parsing attempts failed for {context}, trying aggressive repair")
-                try:
-                    # Try to extract any JSON-like structure
-                    json_pattern = r'(\{.*\}|\[.*\])'
-                    matches = re.findall(json_pattern, cand, re.DOTALL)
-                    if matches:
-                        for match in matches:
-                            try:
-                                repaired = json.loads(match)
-                                if isinstance(repaired, dict):
-                                    logger.warning(f"Recovered JSON from aggressive extraction for {context}")
-                                    return repaired
-                            except:
-                                continue
-                except Exception as final_error:
-                    logger.error(f"Final JSON parse failure for {context}: {final_error}")
-    
-    # All attempts failed
-    error_msg = f"Failed to parse JSON after {max_retries} attempts for context: {context}"
-    logger.error(error_msg)
-    raise json.JSONDecodeError(error_msg, raw, 0)
+
+    # Try direct parse first
+    try:
+        obj = json.loads(cand)
+        if isinstance(obj, dict):
+            return obj
+        if isinstance(obj, list) and len(obj) == 1 and isinstance(obj[0], dict):
+            return obj[0]
+        if not isinstance(obj, dict):
+            raise json.JSONDecodeError("Top-level JSON must be an object", cand, 0)
+    except json.JSONDecodeError:
+        pass
+
+    # Walk for the first balanced JSON object
+    s = cand
+    start = s.find("{")
+    if start == -1:
+        raise json.JSONDecodeError("No JSON object found", cand, 0)
+
+    depth = 0
+    in_str = False
+    esc = False
+    end = None
+    for i in range(start, len(s)):
+        ch = s[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+
+    if end is None:
+        raise json.JSONDecodeError("JSON object appears truncated (missing closing brace)", cand, 0)
+
+    snippet = _strip_fences(s[start:end])
+    obj = json.loads(snippet)
+    if not isinstance(obj, dict):
+        raise json.JSONDecodeError("Top-level JSON must be an object", snippet, 0)
+    return obj
 
 
 # --- Debug dump -----------------------------------------------------------
@@ -401,44 +260,21 @@ def llm_json(system: str, user: str, temperature: float = None, max_tokens: int 
 
     def _gemini_request_payload() -> tuple:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
-        # Combine system and user with clear but flexible instructions
-        # Remove restrictive constraints that cause empty responses
         prompt = (
             system.strip()
             + "\n\n"
-            + "Please provide the requested information in valid JSON format.\n"
-            + "Your response should be a JSON object or array that I can parse.\n"
-            + "Example format: {\"data\": [\"item1\", \"item2\"]} or [\"item1\", \"item2\"]\n"
-            + "This is for educational/scientific content about: " + user.split('"')[1] if '"' in user else user[:100] + "\n\n"
+            + "CRITICAL: Output MUST be a single valid JSON object. No markdown. No code fences. No commentary.\n"
             + user.strip()
         )
         payload = {
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "generationConfig": {
-                "temperature": max(0.7, float(temp)),  # Increase temperature for more creative responses
+                "temperature": float(temp),
                 "maxOutputTokens": int(max_tokens),
-                # REMOVED: responseMimeType="application/json" - Let model return text
-                # REMOVED: stopSequences - Too restrictive
+                "responseMimeType": "application/json",
+                "stopSequences": ["```"],  # Prevent markdown fences
                 "thinkingConfig": {"thinkingBudget": 0},
             },
-            "safetySettings": [
-                {
-                    "category": "HARM_CATEGORY_HARASSMENT",
-                    "threshold": "BLOCK_NONE"
-                },
-                {
-                    "category": "HARM_CATEGORY_HATE_SPEECH",
-                    "threshold": "BLOCK_NONE"
-                },
-                {
-                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                    "threshold": "BLOCK_NONE"
-                },
-                {
-                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                    "threshold": "BLOCK_NONE"
-                }
-            ]
         }
         headers = {
             "Content-Type": "application/json",
@@ -449,19 +285,13 @@ def llm_json(system: str, user: str, temperature: float = None, max_tokens: int 
     def _moonshot_request_payload() -> tuple:
         url = f"{MOONSHOT_BASE_URL}/chat/completions"
         headers = {"Authorization": f"Bearer {MOONSHOT_API_KEY}", "Content-Type": "application/json"}
-        # More flexible system prompt
-        enhanced_system = (
-            system.strip()
-            + "\n\nPlease provide the response in valid JSON format (object or array). "
-            + "Example: {\"data\": [\"item1\", \"item2\"]} or [\"item1\", \"item2\"]"
-        )
         payload = {
             "model": MOONSHOT_MODEL,
-            "temperature": max(0.7, float(temp)),  # Increase temperature
+            "temperature": int(temp) if isinstance(temp, (int, float)) and int(temp) == 1 else float(temp),
             "max_tokens": int(max_tokens),
-            # REMOVED: response_format - Let model return text
+            "response_format": {"type": "json_object"},
             "messages": [
-                {"role": "system", "content": enhanced_system},
+                {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
         }

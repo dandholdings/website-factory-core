@@ -158,6 +158,7 @@ def main():
     parser.add_argument("--generate-plan", action="store_true", help="Generate a new plan instead of using blueprint")
     parser.add_argument("--site-yaml", default="data/site.yaml", help="Path to site.yaml")
     parser.add_argument("--force", action="store_true", help="Overwrite existing taxonomy")
+    parser.add_argument("--use-niche-spec", action="store_true", help="Use NicheSpec pre-pass for concrete taxonomy generation")
     args = parser.parse_args()
 
     if args.site_root:
@@ -251,6 +252,49 @@ def main():
             print(f"Override '{args.override_name}' not found in taxonomy_overrides.")
             sys.exit(1)
 
+    # Check if we should use NicheSpec pre-pass
+    if args.use_niche_spec and args.niche and not plan and not override:
+        print(f"🔍 Using NicheSpec pre-pass for niche: {args.niche}")
+        
+        try:
+            from niche_spec import generate_niche_spec, generate_taxonomy_from_niche_spec
+            
+            # Generate NicheSpec
+            print("  Generating NicheSpec...")
+            site_root = Path.cwd()
+            niche_spec = generate_niche_spec(args.niche, site_root)
+            
+            print(f"  ✅ NicheSpec generated: {len(niche_spec.core_entities)} entities, {len(niche_spec.core_problems)} problems")
+            
+            # Generate taxonomy from NicheSpec
+            print("  Generating taxonomy from NicheSpec...")
+            taxonomy_result = generate_taxonomy_from_niche_spec(
+                niche_spec=niche_spec,
+                hub_count=args.hub_count,
+                clusters_per_hub=args.clusters_per_hub,
+                pages_per_hub=args.pages_per_hub
+            )
+            
+            family_id = taxonomy_result.get("family_id", "niche-spec")
+            family_label = taxonomy_result.get("family_label", f"Custom {args.niche} Family")
+            hubs = taxonomy_result.get("hubs", [])
+            bp = {"family_label": family_label, "hubs": hubs}
+            
+            print(f"  ✅ Taxonomy generated from NicheSpec: {family_label} ({len(hubs)} hubs)")
+            
+            # Skip blueprint selection and go directly to CIV validation
+            plan = None
+            override = None
+            
+        except ImportError as e:
+            print(f"⚠️  NicheSpec module not available: {e}")
+            print("  Falling back to traditional blueprint selection")
+            args.use_niche_spec = False
+        except Exception as e:
+            print(f"⚠️  NicheSpec generation failed: {e}")
+            print("  Falling back to traditional blueprint selection")
+            args.use_niche_spec = False
+    
     if plan:
         # Use plan-based taxonomy
         family_id = plan.get("family_id", "new-family")
@@ -285,6 +329,11 @@ def main():
         family_id = override.get("family_id") or (args.family or "override")
         bp = {"family_label": override.get("family_label") or "Override", "hubs": hubs}
         print(f"Using override taxonomy: {args.override_name} ({len(hubs)} hubs)")
+    
+    elif args.use_niche_spec and 'hubs' in locals():
+        # We already have hubs from NicheSpec, skip blueprint selection
+        print(f"Using NicheSpec-generated taxonomy: {family_label} ({len(hubs)} hubs)")
+    
     else:
         # Select blueprint (traditional approach)
         if args.family:
